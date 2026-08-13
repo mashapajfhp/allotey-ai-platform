@@ -35,6 +35,12 @@
 
 **Mitigation:** Identify which features are used. Ensure core OSS features are sufficient. Budget for enterprise licenses if needed.
 
+### 5. SSPL — inngest/inngest
+
+**Risk:** SSPL (Server Side Public License) is more restrictive than AGPL. If the platform offers Inngest as part of a managed service, the entire service stack must be open-sourced. This is a significant concern for any SaaS deployment.
+
+**Mitigation:** Evaluate whether Inngest can be used purely for self-hosted internal workflows. If the platform will be offered as SaaS, consider Temporal (MIT) or Restate (verify license) as alternatives. Do not adopt Inngest as a core workflow dependency without confirming deployment model implications.
+
 ## Unverified Licenses
 
 The following repositories have licenses that have NOT been read and verified:

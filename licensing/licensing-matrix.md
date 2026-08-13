@@ -47,6 +47,8 @@
 | langfuse/langfuse | MIT (core) | Yes | Yes | Include license | None | None | Yes | Yes | Yes | Yes | LOW | VERIFY: EE features may be separately licensed |
 | **Workflows** | | | | | | | | | | | | |
 | temporalio/temporal | MIT | Yes | Yes | Include license | None | None | Yes | Yes | Yes | Yes | LOW | Cloud service is separate |
+| inngest/inngest | SSPL | Restricted | Yes | Source disclosure if offering as service | Yes — if offered as managed service | HIGH if offering as service | Yes (research) | Caution | Caution | NO | HIGH | SSPL prohibits offering as a managed service without full source disclosure |
+| restatedev/restate | NEEDS VERIFICATION | — | — | — | — | — | Yes (research) | VERIFY | VERIFY | VERIFY | UNKNOWN | Read LICENSE file before any use |
 | **Metadata** | | | | | | | | | | | | |
 | datahub-project/datahub | Apache 2.0 | Yes | Yes | Include license | None | None | Yes | Yes | Yes | Yes | LOW | |
 | open-metadata/OpenMetadata | Apache 2.0 | Yes | Yes | Include license | None | None | Yes | Yes | Yes | Yes | LOW | |
@@ -81,6 +83,12 @@
 - New files can use any license
 - **Safe for:** Using as dependency (linking is OK)
 - **Caution for:** Modifying existing MPL files (those must stay MPL-2.0)
+
+### SSPL (Inngest)
+- **Server Side Public License** — similar to AGPL but stricter: if you offer Inngest as part of a managed service, you must open-source the entire service stack
+- **Safe for:** Self-hosted internal use, architecture research
+- **Caution for:** Using in a product that could be characterized as offering Inngest as a service
+- This is a significant concern if the platform is ever offered as SaaS
 
 ### Dual-Licensed Projects
 - Several projects (LiteLLM, Langfuse, ClickHouse) have open-source cores with enterprise features under separate terms
