@@ -1,17 +1,16 @@
-# Spike 004: Can OpenFGA Model User-to-Agent-to-Tool Permission Delegation?
+# Spike 004: OpenFGA Authorization — Delegation, ScopeContext, and Three Agent Modes
 
-**Status:** NOT STARTED
-**Time-box:** 1.5 weeks
-**Author:** TBD
-**Date:** 2026-08-13
+> STATUS: NOT STARTED
+> Last updated: 2026-08-14
+> References: `architecture/authorization-architecture.md`, `architecture/identity-federation-architecture.md`, `architecture/platform-api-architecture.md`, `architecture/platform-tenancy-model.md`
 
 ## Question
 
-Can OpenFGA model the permission delegation chain from User to Agent to Tool? When an agent acts on behalf of a user, can OpenFGA enforce that the agent's permissions are bounded by both the user's permissions AND the agent's declared capabilities? Can contextual tuples provide runtime permission scoping without excessive tuple storage? Can this model perform at expected query volumes?
+Can OpenFGA model: (1) the three agent execution modes (user-delegated, service-delegated, autonomous) with correct governance at each layer, (2) the ScopeContext hierarchy with server-side resolution, and (3) workspace-level logical authorization within tenants? Can this model perform at expected query volumes?
 
 ## Hypothesis
 
-We believe OpenFGA can model user-to-agent-to-tool delegation using a combination of stored relationships and contextual tuples. The delegation model should express: "Agent X can perform action Y on resource Z because User A granted delegation to Agent X, User A has permission Y on resource Z, and Agent X's capability set includes action Y." We expect contextual tuples will be essential for runtime scoping (e.g., session-level or conversation-level permissions) without creating permanent tuple bloat.
+We believe OpenFGA can model all three agent modes and the full scope hierarchy using a combination of stored relationships and contextual tuples. The key tests: user-delegated agents are bounded by every applicable governance layer independently permitting; autonomous agents operate under explicitly configured permissions with an accountable owner; ScopeContext resolution prevents confused-deputy attacks by verifying the resource ancestry server-side.
 
 ## Prototype Plan
 
@@ -52,14 +51,26 @@ We believe OpenFGA can model user-to-agent-to-tool delegation using a combinatio
 
 ### Test Scenarios
 
-1. **Basic delegation** — User grants agent permission; agent invokes tool; verify access
-2. **Bounded delegation** — User has broad permissions; agent has narrow capabilities; verify agent is limited to intersection
-3. **Revocation** — User revokes delegation; verify agent immediately loses access
-4. **Escalation prevention** — Agent attempts action beyond user's permissions; verify denial
-5. **Multi-agent** — User delegates to multiple agents with different capability sets
-6. **Transitive delegation** — Agent A delegates to Agent B (should this be allowed? Test both)
-7. **Contextual scoping** — Same agent has different permissions in different sessions via contextual tuples
-8. **Cross-tenant isolation** — Agent delegated by Tenant A user cannot access Tenant B resources
+**Delegation Modes:**
+1. **User-delegated** — User delegates to agent; every governance layer independently permits; agent invokes tool; verify access
+2. **Service-delegated** — Service account delegates to agent; same governance model; verify access
+3. **Autonomous agent** — Agent operates under own permissions, no delegating session; verify permissions are explicitly configured, not inherited
+4. **Autonomous accountability** — Verify autonomous agent's owner is recorded in audit but owner's permissions do not apply at runtime
+
+**Governance:**
+5. **Layered governance** — User has permission, but agent's capability scope does not include the action; verify denial (not intersection — each layer independently evaluated)
+6. **Revocation** — User revokes delegation; verify agent immediately loses access
+7. **Escalation prevention** — Agent attempts action beyond delegating principal's permissions; verify denial
+8. **Multi-agent chain** — User → Agent A → Agent B; every layer independently permits at every step
+
+**ScopeContext:**
+9. **Server-side scope resolution** — Verify OpenFGA can resolve tenant → organization → product → platform ancestry from stored relationships
+10. **Confused-deputy prevention** — Agent supplies scope_id from one resource tree but the resource belongs to another; verify denial
+11. **Workspace authorization** — Within a tenant, verify workspace-level access control (Engineering contributor cannot read Finance workspace resources)
+
+**Isolation:**
+12. **Cross-tenant isolation** — Agent delegated by Tenant A user cannot access Tenant B resources
+13. **Cross-workspace authorization** — Within same tenant, workspace-scoped agent cannot access another workspace's resources (when product enforces workspace authorization)
 
 ### Performance Testing
 

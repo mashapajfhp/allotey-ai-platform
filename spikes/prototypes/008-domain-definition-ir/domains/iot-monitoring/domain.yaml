@@ -1,0 +1,2450 @@
+# =============================================================================
+# Domain Definition IR: Industrial IoT Monitoring
+# =============================================================================
+# Domain B in the four-domain stress test.
+# Architectural focus: Real-time telemetry, high-volume event streams,
+# pattern detection, anomaly alerting, time-series data handling.
+# =============================================================================
+
+domain_definition:
+  name: "iot-monitoring"
+  version: "1.0.0"
+  ir_schema_version: "0.1.0"
+  description: >
+    Industrial IoT monitoring domain — models real-time telemetry ingestion,
+    sensor management, anomaly detection, and maintenance workflows for
+    industrial facilities. Designed to stress-test high-volume event streams,
+    time-series data patterns, and real-time alerting pipelines.
+
+  # ===========================================================================
+  # SUB-IR 1: ONTOLOGY
+  # ===========================================================================
+  # Defines the core entity graph — what things exist in this domain and how
+  # they relate. Emphasis on the high-volume SensorReading entity and the
+  # hierarchical Facility > Device > Sensor structure.
+  # ===========================================================================
+  ontology:
+    entities:
+
+      - name: "Facility"
+        description: "A physical industrial site (plant, warehouse, refinery) containing devices and sensors."
+        attributes:
+          - name: "facility_id"
+            type: "uuid"
+            required: true
+            primary_key: true
+          - name: "name"
+            type: "string"
+            required: true
+            constraints:
+              max_length: 200
+          - name: "location"
+            type: "object"
+            required: true
+            properties:
+              latitude:
+                type: "float"
+              longitude:
+                type: "float"
+              address:
+                type: "string"
+              timezone:
+                type: "string"
+                description: "IANA timezone identifier for local time interpretation."
+          - name: "facility_type"
+            type: "enum"
+            required: true
+            values:
+              - "manufacturing_plant"
+              - "warehouse"
+              - "refinery"
+              - "power_station"
+              - "water_treatment"
+              - "data_center"
+              - "distribution_hub"
+          - name: "operational_status"
+            type: "enum"
+            required: true
+            values:
+              - "active"
+              - "idle"
+              - "shutdown"
+              - "under_construction"
+          - name: "commissioned_at"
+            type: "datetime"
+            required: true
+          - name: "max_device_capacity"
+            type: "integer"
+            required: false
+            description: "Maximum number of devices this facility is designed to support."
+          - name: "metadata"
+            type: "object"
+            required: false
+            description: "Extensible key-value metadata for facility-specific attributes."
+        relationships:
+          - name: "devices"
+            target: "Device"
+            cardinality: "one_to_many"
+            description: "All devices installed at this facility."
+          - name: "assigned_personnel"
+            target: "PersonnelAssignment"
+            cardinality: "one_to_many"
+            description: "Personnel assigned to operate or maintain this facility."
+
+      - name: "Device"
+        description: >
+          A piece of industrial equipment (pump, motor, HVAC unit, turbine)
+          that hosts one or more sensors. Tracks operational state transitions.
+        attributes:
+          - name: "device_id"
+            type: "uuid"
+            required: true
+            primary_key: true
+          - name: "facility_id"
+            type: "uuid"
+            required: true
+            foreign_key: "Facility.facility_id"
+          - name: "name"
+            type: "string"
+            required: true
+            constraints:
+              max_length: 200
+          - name: "device_type"
+            type: "enum"
+            required: true
+            values:
+              - "pump"
+              - "motor"
+              - "compressor"
+              - "turbine"
+              - "hvac_unit"
+              - "conveyor"
+              - "generator"
+              - "transformer"
+              - "valve"
+              - "heat_exchanger"
+          - name: "manufacturer"
+            type: "string"
+            required: false
+          - name: "model_number"
+            type: "string"
+            required: false
+          - name: "serial_number"
+            type: "string"
+            required: true
+            constraints:
+              unique: true
+          - name: "operational_state"
+            type: "enum"
+            required: true
+            values:
+              - "online"
+              - "offline"
+              - "maintenance"
+              - "degraded"
+              - "decommissioned"
+            description: >
+              Current operational state. State transitions are tracked as events.
+              A decommissioned device cannot return to any other state.
+          - name: "criticality"
+            type: "enum"
+            required: true
+            values:
+              - "critical"
+              - "high"
+              - "medium"
+              - "low"
+            description: "How critical this device is to facility operations. Drives alert priority."
+          - name: "installed_at"
+            type: "datetime"
+            required: true
+          - name: "last_maintenance_at"
+            type: "datetime"
+            required: false
+          - name: "firmware_version"
+            type: "string"
+            required: false
+          - name: "expected_lifespan_hours"
+            type: "integer"
+            required: false
+            description: "Manufacturer-rated operational hours before recommended replacement."
+          - name: "accumulated_run_hours"
+            type: "float"
+            required: false
+            description: "Total operational hours accumulated since installation."
+        relationships:
+          - name: "facility"
+            target: "Facility"
+            cardinality: "many_to_one"
+          - name: "sensors"
+            target: "Sensor"
+            cardinality: "one_to_many"
+          - name: "alerts"
+            target: "Alert"
+            cardinality: "one_to_many"
+          - name: "maintenance_orders"
+            target: "MaintenanceOrder"
+            cardinality: "one_to_many"
+
+      - name: "Sensor"
+        description: >
+          A measurement instrument attached to a device. Produces time-series
+          readings. Carries calibration metadata that affects reading interpretation.
+        attributes:
+          - name: "sensor_id"
+            type: "uuid"
+            required: true
+            primary_key: true
+          - name: "device_id"
+            type: "uuid"
+            required: true
+            foreign_key: "Device.device_id"
+          - name: "name"
+            type: "string"
+            required: true
+          - name: "sensor_type"
+            type: "enum"
+            required: true
+            values:
+              - "temperature"
+              - "pressure"
+              - "vibration"
+              - "humidity"
+              - "flow_rate"
+              - "voltage"
+              - "current"
+              - "power"
+              - "rpm"
+              - "acoustic"
+              - "gas_concentration"
+              - "level"
+              - "ph"
+              - "conductivity"
+          - name: "unit_of_measure"
+            type: "string"
+            required: true
+            description: "SI or domain-standard unit (e.g., celsius, pascal, mm_per_sec, percent_rh)."
+          - name: "status"
+            type: "enum"
+            required: true
+            values:
+              - "active"
+              - "inactive"
+              - "calibrating"
+              - "faulty"
+              - "decommissioned"
+          - name: "sampling_interval_seconds"
+            type: "integer"
+            required: true
+            description: "How frequently this sensor emits readings, in seconds."
+            constraints:
+              min: 1
+              max: 86400
+          - name: "calibration"
+            type: "object"
+            required: true
+            description: "Calibration metadata — affects how raw readings are interpreted."
+            properties:
+              last_calibrated_at:
+                type: "datetime"
+                required: true
+              calibration_due_at:
+                type: "datetime"
+                required: true
+              calibration_standard:
+                type: "string"
+                required: false
+                description: "Reference standard used for calibration."
+              offset:
+                type: "float"
+                required: false
+                description: "Additive correction factor applied to raw readings."
+              scale_factor:
+                type: "float"
+                required: false
+                description: "Multiplicative correction factor applied to raw readings."
+              drift_rate:
+                type: "float"
+                required: false
+                description: "Estimated measurement drift per day since last calibration."
+          - name: "thresholds"
+            type: "object"
+            required: true
+            description: "Alert thresholds for this sensor's readings."
+            properties:
+              warning_low:
+                type: "float"
+                required: false
+              warning_high:
+                type: "float"
+                required: false
+              critical_low:
+                type: "float"
+                required: false
+              critical_high:
+                type: "float"
+                required: false
+              rate_of_change_limit:
+                type: "float"
+                required: false
+                description: "Maximum acceptable change per minute before triggering anomaly detection."
+          - name: "installed_at"
+            type: "datetime"
+            required: true
+          - name: "location_on_device"
+            type: "string"
+            required: false
+            description: "Physical mounting point on the device (e.g., bearing_A, exhaust_port, intake_manifold)."
+        relationships:
+          - name: "device"
+            target: "Device"
+            cardinality: "many_to_one"
+          - name: "readings"
+            target: "SensorReading"
+            cardinality: "one_to_many"
+            high_volume: true
+            description: "Time-series readings stream. This is the highest-volume relationship in the domain."
+
+      - name: "SensorReading"
+        description: >
+          A single telemetry data point from a sensor at a point in time.
+          This is the HIGH-VOLUME entity — millions of readings per day across
+          a facility. Time-series storage semantics apply: append-only, immutable,
+          partitioned by time, subject to retention and downsampling policies.
+        storage_hints:
+          type: "time_series"
+          partition_key: "timestamp"
+          partition_interval: "1 day"
+          retention_policy: "raw_90_days_then_downsample"
+          compression: true
+          immutable: true
+        attributes:
+          - name: "reading_id"
+            type: "uuid"
+            required: true
+            primary_key: true
+          - name: "sensor_id"
+            type: "uuid"
+            required: true
+            foreign_key: "Sensor.sensor_id"
+            indexed: true
+          - name: "timestamp"
+            type: "datetime"
+            required: true
+            precision: "millisecond"
+            indexed: true
+            description: "When the reading was captured at the sensor. Millisecond precision."
+          - name: "value"
+            type: "float"
+            required: true
+            description: "The measured value after calibration corrections."
+          - name: "raw_value"
+            type: "float"
+            required: false
+            description: "The raw sensor value before calibration corrections."
+          - name: "quality"
+            type: "enum"
+            required: true
+            values:
+              - "good"
+              - "uncertain"
+              - "bad"
+              - "stale"
+            description: "Data quality indicator. Bad/stale readings are ingested but flagged."
+          - name: "ingested_at"
+            type: "datetime"
+            required: true
+            description: "When the platform received this reading. Used for latency tracking."
+          - name: "anomaly_score"
+            type: "float"
+            required: false
+            constraints:
+              min: 0.0
+              max: 1.0
+            description: >
+              Anomaly detection score computed at ingestion time.
+              0.0 = normal, 1.0 = extreme anomaly. Null if anomaly detection not yet run.
+        relationships:
+          - name: "sensor"
+            target: "Sensor"
+            cardinality: "many_to_one"
+
+      - name: "Alert"
+        description: >
+          A notification generated when sensor readings breach thresholds,
+          anomaly patterns are detected, or device state changes unexpectedly.
+          Alerts have a lifecycle: raised > acknowledged > investigating > resolved/dismissed.
+        attributes:
+          - name: "alert_id"
+            type: "uuid"
+            required: true
+            primary_key: true
+          - name: "device_id"
+            type: "uuid"
+            required: true
+            foreign_key: "Device.device_id"
+          - name: "sensor_id"
+            type: "uuid"
+            required: false
+            foreign_key: "Sensor.sensor_id"
+            description: "The sensor that triggered this alert, if sensor-specific."
+          - name: "facility_id"
+            type: "uuid"
+            required: true
+            foreign_key: "Facility.facility_id"
+          - name: "alert_type"
+            type: "enum"
+            required: true
+            values:
+              - "threshold_breach"
+              - "anomaly_detected"
+              - "device_offline"
+              - "device_degraded"
+              - "calibration_overdue"
+              - "communication_loss"
+              - "rate_of_change"
+              - "pattern_deviation"
+          - name: "severity"
+            type: "enum"
+            required: true
+            values:
+              - "critical"
+              - "warning"
+              - "info"
+          - name: "status"
+            type: "enum"
+            required: true
+            values:
+              - "raised"
+              - "acknowledged"
+              - "investigating"
+              - "resolved"
+              - "dismissed"
+              - "auto_resolved"
+          - name: "title"
+            type: "string"
+            required: true
+            constraints:
+              max_length: 300
+          - name: "description"
+            type: "string"
+            required: true
+            description: "Human-readable description of what triggered the alert and why it matters."
+          - name: "trigger_value"
+            type: "float"
+            required: false
+            description: "The sensor value that triggered the alert."
+          - name: "trigger_threshold"
+            type: "float"
+            required: false
+            description: "The threshold that was breached."
+          - name: "raised_at"
+            type: "datetime"
+            required: true
+          - name: "acknowledged_at"
+            type: "datetime"
+            required: false
+          - name: "acknowledged_by"
+            type: "string"
+            required: false
+            description: "User ID or agent ID that acknowledged this alert."
+          - name: "resolved_at"
+            type: "datetime"
+            required: false
+          - name: "resolved_by"
+            type: "string"
+            required: false
+          - name: "resolution_notes"
+            type: "string"
+            required: false
+          - name: "deduplication_key"
+            type: "string"
+            required: true
+            description: >
+              Composite key used for alert deduplication (typically sensor_id + alert_type).
+              Alerts with the same key within the deduplication window are suppressed.
+          - name: "correlation_group"
+            type: "string"
+            required: false
+            description: >
+              Groups related alerts that stem from the same root cause.
+              Enables alert correlation and noise reduction.
+          - name: "escalation_level"
+            type: "integer"
+            required: true
+            default: 0
+            description: "Current escalation level. Incremented when acknowledgement SLAs are missed."
+        relationships:
+          - name: "device"
+            target: "Device"
+            cardinality: "many_to_one"
+          - name: "sensor"
+            target: "Sensor"
+            cardinality: "many_to_one"
+          - name: "facility"
+            target: "Facility"
+            cardinality: "many_to_one"
+          - name: "maintenance_orders"
+            target: "MaintenanceOrder"
+            cardinality: "one_to_many"
+            description: "Maintenance orders created in response to this alert."
+
+      - name: "MaintenanceOrder"
+        description: >
+          A work order for device maintenance — can be triggered by alerts,
+          scheduled preventively, or requested manually. Tracks the full
+          lifecycle from request through execution and verification.
+        attributes:
+          - name: "order_id"
+            type: "uuid"
+            required: true
+            primary_key: true
+          - name: "device_id"
+            type: "uuid"
+            required: true
+            foreign_key: "Device.device_id"
+          - name: "facility_id"
+            type: "uuid"
+            required: true
+            foreign_key: "Facility.facility_id"
+          - name: "alert_id"
+            type: "uuid"
+            required: false
+            foreign_key: "Alert.alert_id"
+            description: "The alert that triggered this order, if reactive maintenance."
+          - name: "order_type"
+            type: "enum"
+            required: true
+            values:
+              - "reactive"
+              - "preventive"
+              - "predictive"
+              - "corrective"
+              - "inspection"
+          - name: "priority"
+            type: "enum"
+            required: true
+            values:
+              - "emergency"
+              - "urgent"
+              - "normal"
+              - "low"
+          - name: "status"
+            type: "enum"
+            required: true
+            values:
+              - "requested"
+              - "estimated"
+              - "pending_approval"
+              - "approved"
+              - "scheduled"
+              - "in_progress"
+              - "completed"
+              - "verified"
+              - "cancelled"
+          - name: "title"
+            type: "string"
+            required: true
+          - name: "description"
+            type: "string"
+            required: true
+          - name: "requested_by"
+            type: "string"
+            required: true
+          - name: "assigned_to"
+            type: "string"
+            required: false
+            description: "User ID of the maintenance technician assigned to this order."
+          - name: "estimated_cost"
+            type: "float"
+            required: false
+            description: "Estimated cost in base currency units."
+          - name: "actual_cost"
+            type: "float"
+            required: false
+          - name: "estimated_duration_hours"
+            type: "float"
+            required: false
+          - name: "actual_duration_hours"
+            type: "float"
+            required: false
+          - name: "requires_device_shutdown"
+            type: "boolean"
+            required: true
+            default: false
+            description: "Whether the device must go offline for this maintenance."
+          - name: "parts_required"
+            type: "array"
+            required: false
+            items:
+              type: "object"
+              properties:
+                part_number:
+                  type: "string"
+                description:
+                  type: "string"
+                quantity:
+                  type: "integer"
+          - name: "created_at"
+            type: "datetime"
+            required: true
+          - name: "approved_at"
+            type: "datetime"
+            required: false
+          - name: "approved_by"
+            type: "string"
+            required: false
+          - name: "scheduled_start"
+            type: "datetime"
+            required: false
+          - name: "scheduled_end"
+            type: "datetime"
+            required: false
+          - name: "completed_at"
+            type: "datetime"
+            required: false
+          - name: "verification_notes"
+            type: "string"
+            required: false
+        relationships:
+          - name: "device"
+            target: "Device"
+            cardinality: "many_to_one"
+          - name: "facility"
+            target: "Facility"
+            cardinality: "many_to_one"
+          - name: "triggering_alert"
+            target: "Alert"
+            cardinality: "many_to_one"
+
+      - name: "PersonnelAssignment"
+        description: >
+          Maps personnel (operators, engineers, technicians) to facilities
+          and defines their operational scope. This is the join entity that
+          enables facility-scoped authorization.
+        attributes:
+          - name: "assignment_id"
+            type: "uuid"
+            required: true
+            primary_key: true
+          - name: "user_id"
+            type: "string"
+            required: true
+            description: "External identity provider user ID."
+          - name: "facility_id"
+            type: "uuid"
+            required: true
+            foreign_key: "Facility.facility_id"
+          - name: "role"
+            type: "enum"
+            required: true
+            values:
+              - "operator"
+              - "engineer"
+              - "facility_manager"
+              - "maintenance_tech"
+              - "admin"
+          - name: "assigned_at"
+            type: "datetime"
+            required: true
+          - name: "valid_until"
+            type: "datetime"
+            required: false
+            description: "If set, this assignment expires at this time."
+          - name: "device_scope"
+            type: "array"
+            required: false
+            items:
+              type: "uuid"
+            description: >
+              If set, limits this assignment to specific devices within
+              the facility. Null means access to all devices at the facility.
+        relationships:
+          - name: "facility"
+            target: "Facility"
+            cardinality: "many_to_one"
+
+  # ===========================================================================
+  # SUB-IR 2: SEMANTIC
+  # ===========================================================================
+  # Defines measures (quantitative metrics) and dimensions (how to slice them).
+  # Tailored for time-series analytics: uptime, failure rates, throughput,
+  # and anomaly patterns.
+  # ===========================================================================
+  semantic:
+    measures:
+      - name: "mean_time_between_failures"
+        description: "Average operational hours between device failures (state transitions to offline/degraded)."
+        entity: "Device"
+        aggregation: "average"
+        unit: "hours"
+        formula: "total_operational_hours / failure_count"
+        time_series: true
+
+      - name: "mean_time_to_repair"
+        description: "Average duration from maintenance order creation to verified completion."
+        entity: "MaintenanceOrder"
+        aggregation: "average"
+        unit: "hours"
+        formula: "avg(completed_at - created_at) where status = 'verified'"
+        time_series: true
+
+      - name: "sensor_uptime"
+        description: "Percentage of time a sensor is in 'active' status and producing good-quality readings."
+        entity: "Sensor"
+        aggregation: "percentage"
+        unit: "percent"
+        formula: "(active_good_reading_seconds / total_seconds) * 100"
+        time_series: true
+
+      - name: "anomaly_rate"
+        description: "Number of readings with anomaly_score above 0.7 per total readings, as a percentage."
+        entity: "SensorReading"
+        aggregation: "ratio"
+        unit: "percent"
+        formula: "(count(anomaly_score > 0.7) / count(*)) * 100"
+        time_series: true
+        window: "1 hour"
+
+      - name: "energy_consumption"
+        description: "Total energy consumed across power-type sensors at a facility."
+        entity: "SensorReading"
+        aggregation: "sum"
+        unit: "kilowatt_hours"
+        filter: "sensor.sensor_type = 'power'"
+        time_series: true
+        window: "1 day"
+
+      - name: "avg_temperature"
+        description: "Average temperature reading across temperature sensors."
+        entity: "SensorReading"
+        aggregation: "average"
+        unit: "celsius"
+        filter: "sensor.sensor_type = 'temperature'"
+        time_series: true
+        window: "15 minutes"
+
+      - name: "max_vibration"
+        description: "Peak vibration reading in the time window — spikes indicate potential bearing failure."
+        entity: "SensorReading"
+        aggregation: "max"
+        unit: "mm_per_sec"
+        filter: "sensor.sensor_type = 'vibration'"
+        time_series: true
+        window: "5 minutes"
+
+      - name: "readings_per_minute"
+        description: "Throughput measure — total sensor readings ingested per minute."
+        entity: "SensorReading"
+        aggregation: "count"
+        unit: "count_per_minute"
+        time_series: true
+        window: "1 minute"
+        description_extended: >
+          Key capacity metric. Used to monitor ingestion pipeline health
+          and detect sensor communication failures (unexpected drops).
+
+      - name: "alert_acknowledgement_time"
+        description: "Time between alert raised_at and acknowledged_at."
+        entity: "Alert"
+        aggregation: "average"
+        unit: "minutes"
+        formula: "avg(acknowledged_at - raised_at)"
+        time_series: true
+
+      - name: "open_alert_count"
+        description: "Number of alerts in raised or acknowledged status (not yet resolved)."
+        entity: "Alert"
+        aggregation: "count"
+        unit: "count"
+        filter: "status in ('raised', 'acknowledged', 'investigating')"
+
+      - name: "device_availability"
+        description: "Percentage of devices in 'online' state at a facility."
+        entity: "Device"
+        aggregation: "percentage"
+        unit: "percent"
+        formula: "(count(operational_state = 'online') / count(operational_state != 'decommissioned')) * 100"
+
+      - name: "maintenance_backlog"
+        description: "Number of maintenance orders in requested, estimated, or pending_approval status."
+        entity: "MaintenanceOrder"
+        aggregation: "count"
+        unit: "count"
+        filter: "status in ('requested', 'estimated', 'pending_approval')"
+
+    dimensions:
+      - name: "by_facility"
+        entity: "Facility"
+        attribute: "facility_id"
+        label: "Facility"
+        hierarchy:
+          - "facility_type"
+          - "facility_id"
+
+      - name: "by_device_type"
+        entity: "Device"
+        attribute: "device_type"
+        label: "Device Type"
+
+      - name: "by_device_criticality"
+        entity: "Device"
+        attribute: "criticality"
+        label: "Device Criticality"
+
+      - name: "by_sensor_type"
+        entity: "Sensor"
+        attribute: "sensor_type"
+        label: "Sensor Type"
+
+      - name: "by_alert_severity"
+        entity: "Alert"
+        attribute: "severity"
+        label: "Alert Severity"
+
+      - name: "by_alert_type"
+        entity: "Alert"
+        attribute: "alert_type"
+        label: "Alert Type"
+
+      - name: "by_maintenance_type"
+        entity: "MaintenanceOrder"
+        attribute: "order_type"
+        label: "Maintenance Type"
+
+      - name: "by_time_window"
+        type: "temporal"
+        granularities:
+          - "1 minute"
+          - "5 minutes"
+          - "15 minutes"
+          - "1 hour"
+          - "1 day"
+          - "1 week"
+          - "1 month"
+        description: >
+          Temporal dimension for time-series analysis. Supports multiple
+          granularities for drill-down from monthly trends to minute-level
+          investigation.
+
+      - name: "by_data_quality"
+        entity: "SensorReading"
+        attribute: "quality"
+        label: "Data Quality"
+
+      - name: "by_operational_state"
+        entity: "Device"
+        attribute: "operational_state"
+        label: "Operational State"
+
+  # ===========================================================================
+  # SUB-IR 3: AUTHORIZATION
+  # ===========================================================================
+  # Role-based access with facility-scoped relationships. The key architectural
+  # pattern: access is scoped to facility assignments, not global roles.
+  # ===========================================================================
+  authorization:
+    roles:
+      - name: "operator"
+        description: >
+          Monitors real-time dashboards and sensor readings. Can acknowledge
+          alerts and escalate issues. Cannot modify device configurations.
+        level: 1
+
+      - name: "maintenance_tech"
+        description: >
+          Executes maintenance work orders. Can update order status, log
+          findings, and record parts used. Cannot approve high-cost orders.
+        level: 2
+
+      - name: "engineer"
+        description: >
+          Configures sensors and devices. Can calibrate sensors, set alert
+          thresholds, commission/decommission devices. Has read access to
+          all telemetry at assigned facilities.
+        level: 3
+
+      - name: "facility_manager"
+        description: >
+          Full operational authority over their facility. Can approve
+          maintenance orders, manage personnel assignments, and configure
+          facility-level policies.
+        level: 4
+
+      - name: "admin"
+        description: >
+          Platform-wide administrative access. Can manage facilities,
+          configure system-level policies, and access cross-facility analytics.
+        level: 5
+
+    rules:
+      # --- Operator rules ---
+      - role: "operator"
+        entity: "SensorReading"
+        actions: ["read"]
+        scope: "assigned_facility"
+        description: "Operators can view sensor readings at their assigned facilities."
+
+      - role: "operator"
+        entity: "Alert"
+        actions: ["read", "acknowledge"]
+        scope: "assigned_facility"
+        description: "Operators can view and acknowledge alerts at their assigned facilities."
+
+      - role: "operator"
+        entity: "Device"
+        actions: ["read"]
+        scope: "assigned_facility"
+        description: "Operators can view device status at their assigned facilities."
+
+      - role: "operator"
+        entity: "MaintenanceOrder"
+        actions: ["read"]
+        scope: "assigned_facility"
+        description: "Operators can view maintenance orders but cannot create or modify them."
+
+      # --- Maintenance tech rules ---
+      - role: "maintenance_tech"
+        entity: "MaintenanceOrder"
+        actions: ["read", "create", "update"]
+        scope: "assigned_facility"
+        conditions:
+          - "can only update orders assigned to them or unassigned orders"
+          - "cannot change status to 'approved' (requires facility_manager)"
+          - "can set status to 'in_progress', 'completed'"
+        description: "Maintenance techs can create and work on maintenance orders at their facilities."
+
+      - role: "maintenance_tech"
+        entity: "Device"
+        actions: ["read", "update_state"]
+        scope: "assigned_facility"
+        conditions:
+          - "can transition device to 'maintenance' state when starting work"
+          - "can transition device back to 'online' after maintenance completion"
+          - "cannot decommission devices"
+        description: "Maintenance techs can update device state during maintenance work."
+
+      - role: "maintenance_tech"
+        entity: "SensorReading"
+        actions: ["read"]
+        scope: "assigned_facility"
+
+      - role: "maintenance_tech"
+        entity: "Alert"
+        actions: ["read", "acknowledge"]
+        scope: "assigned_facility"
+
+      # --- Engineer rules ---
+      - role: "engineer"
+        entity: "Sensor"
+        actions: ["read", "create", "update", "calibrate"]
+        scope: "assigned_facility"
+        conditions:
+          - "can modify calibration metadata"
+          - "can set alert thresholds"
+          - "can change sensor status"
+        description: "Engineers manage sensor configuration and calibration."
+
+      - role: "engineer"
+        entity: "Device"
+        actions: ["read", "create", "update", "commission", "decommission"]
+        scope: "assigned_facility"
+        conditions:
+          - "decommissioning requires confirmation step"
+          - "can register new devices and configure them"
+        description: "Engineers manage the device lifecycle at their facilities."
+
+      - role: "engineer"
+        entity: "SensorReading"
+        actions: ["read", "export"]
+        scope: "assigned_facility"
+        description: "Engineers can read and export sensor data for analysis."
+
+      - role: "engineer"
+        entity: "Alert"
+        actions: ["read", "acknowledge", "investigate", "resolve", "configure_rules"]
+        scope: "assigned_facility"
+        description: "Engineers can manage the full alert lifecycle and configure alerting rules."
+
+      - role: "engineer"
+        entity: "MaintenanceOrder"
+        actions: ["read", "create"]
+        scope: "assigned_facility"
+
+      # --- Facility manager rules ---
+      - role: "facility_manager"
+        entity: "*"
+        actions: ["read", "create", "update", "delete"]
+        scope: "assigned_facility"
+        conditions:
+          - "full access within their facility"
+          - "can approve maintenance orders of any cost"
+          - "can manage personnel assignments for their facility"
+        description: "Facility managers have full authority within their assigned facility."
+
+      - role: "facility_manager"
+        entity: "MaintenanceOrder"
+        actions: ["read", "create", "update", "approve", "cancel"]
+        scope: "assigned_facility"
+        description: "Facility managers can approve and manage all maintenance orders."
+
+      - role: "facility_manager"
+        entity: "PersonnelAssignment"
+        actions: ["read", "create", "update", "revoke"]
+        scope: "assigned_facility"
+        conditions:
+          - "can assign roles up to and including 'engineer' level"
+          - "cannot assign facility_manager or admin roles"
+
+      # --- Admin rules ---
+      - role: "admin"
+        entity: "*"
+        actions: ["*"]
+        scope: "global"
+        description: "Admins have unrestricted access across all facilities."
+
+    relationships:
+      - name: "facility_assignment"
+        description: >
+          The primary authorization relationship. All non-admin access is scoped
+          through PersonnelAssignment — a user can only access entities at
+          facilities where they have an active (non-expired) assignment.
+        from: "PersonnelAssignment.user_id"
+        to: "Facility.facility_id"
+        enforcement: "mandatory"
+        conditions:
+          - "assignment must not be expired (valid_until is null or in the future)"
+          - "if device_scope is set, access is further limited to those specific devices"
+
+      - name: "engineer_device_management"
+        description: >
+          Engineers manage specific devices or all devices at their assigned
+          facilities. When device_scope is set on their PersonnelAssignment,
+          they can only configure sensors and thresholds on those devices.
+        from: "PersonnelAssignment"
+        to: "Device"
+        via: "PersonnelAssignment.device_scope"
+        enforcement: "optional"
+
+      - name: "maintenance_order_ownership"
+        description: >
+          Maintenance techs can only update orders assigned to them or unassigned.
+          This prevents conflicting updates to the same work order.
+        from: "MaintenanceOrder.assigned_to"
+        to: "PersonnelAssignment.user_id"
+        enforcement: "mandatory_for_updates"
+
+  # ===========================================================================
+  # SUB-IR 4: POLICY
+  # ===========================================================================
+  # Business rules, operational constraints, and data lifecycle policies.
+  # Emphasis on time-sensitive SLAs and high-volume data management.
+  # ===========================================================================
+  policy:
+    constraints:
+      - name: "critical_alert_acknowledgement_sla"
+        description: >
+          Critical-severity alerts must be acknowledged within 15 minutes
+          of being raised. If not acknowledged, the alert escalates
+          (escalation_level increments) and notifies the facility manager.
+        entity: "Alert"
+        condition: "severity = 'critical' AND status = 'raised'"
+        rule: "acknowledged_at - raised_at <= 15 minutes"
+        on_violation:
+          action: "escalate"
+          details:
+            - "increment escalation_level"
+            - "notify facility_manager"
+            - "if escalation_level >= 3, notify admin"
+
+      - name: "warning_alert_acknowledgement_sla"
+        description: "Warning-severity alerts must be acknowledged within 1 hour."
+        entity: "Alert"
+        condition: "severity = 'warning' AND status = 'raised'"
+        rule: "acknowledged_at - raised_at <= 60 minutes"
+        on_violation:
+          action: "escalate"
+          details:
+            - "increment escalation_level"
+            - "notify assigned operator"
+
+      - name: "maintenance_approval_threshold"
+        description: >
+          Maintenance orders with estimated_cost exceeding the threshold
+          require explicit facility_manager approval before work can begin.
+          Orders below the threshold can be self-approved by engineers.
+        entity: "MaintenanceOrder"
+        condition: "estimated_cost > 5000"
+        rule: "status must pass through 'pending_approval' and be approved by facility_manager"
+        on_violation:
+          action: "block_transition"
+          details:
+            - "prevent status change to 'scheduled' without approval"
+            - "notify facility_manager of pending approval"
+
+      - name: "decommissioned_device_immutability"
+        description: >
+          Once a device is decommissioned, it cannot generate new alerts,
+          accept new sensor readings, or transition to any other state.
+          Historical data is preserved but no new data flows are permitted.
+        entity: "Device"
+        condition: "operational_state = 'decommissioned'"
+        rule: "no new Alert or SensorReading records can reference this device"
+        on_violation:
+          action: "reject"
+          details:
+            - "discard incoming readings for decommissioned devices"
+            - "suppress alert generation for decommissioned devices"
+
+      - name: "sensor_calibration_enforcement"
+        description: >
+          Sensors with overdue calibration (calibration_due_at in the past)
+          have their readings marked with quality = 'uncertain' and a
+          calibration_overdue alert is generated.
+        entity: "Sensor"
+        condition: "calibration.calibration_due_at < now()"
+        rule: "sensor status should transition to 'calibrating' or readings marked uncertain"
+        on_violation:
+          action: "flag_and_alert"
+          details:
+            - "set reading quality to 'uncertain' for all new readings"
+            - "generate calibration_overdue alert if not already active"
+
+      - name: "maintenance_order_completion_verification"
+        description: >
+          Completed maintenance orders must be verified by an engineer or
+          facility manager within 48 hours. Unverified completions are flagged.
+        entity: "MaintenanceOrder"
+        condition: "status = 'completed'"
+        rule: "must transition to 'verified' within 48 hours of completed_at"
+        on_violation:
+          action: "escalate"
+          details:
+            - "notify facility_manager"
+            - "flag order as requiring verification"
+
+      - name: "device_state_transition_rules"
+        description: "Valid state transitions for device operational_state."
+        entity: "Device"
+        rule: "state_machine"
+        transitions:
+          - from: "online"
+            to: ["offline", "maintenance", "degraded", "decommissioned"]
+          - from: "offline"
+            to: ["online", "maintenance", "decommissioned"]
+          - from: "maintenance"
+            to: ["online", "offline", "decommissioned"]
+          - from: "degraded"
+            to: ["online", "offline", "maintenance", "decommissioned"]
+          - from: "decommissioned"
+            to: []
+            terminal: true
+
+    operational:
+      - name: "sensor_reading_rate_limit"
+        description: >
+          Rate limiting on sensor readings ingestion. Each sensor can submit
+          readings no faster than its configured sampling_interval_seconds.
+          Readings arriving faster than the configured rate are dropped with
+          a warning logged.
+        scope: "per_sensor"
+        rule: "max 1 reading per sensor per sampling_interval_seconds"
+        enforcement: "drop_excess"
+        monitoring:
+          metric: "dropped_readings_count"
+          alert_threshold: "100 per minute per facility"
+
+      - name: "alert_deduplication"
+        description: >
+          Alerts with the same deduplication_key within a 5-minute window
+          are collapsed into a single alert. The first alert is created;
+          subsequent duplicates increment a suppressed_count field and
+          update the last_seen_at timestamp.
+        scope: "per_deduplication_key"
+        rule: "same deduplication_key within 5 minutes = suppress duplicate"
+        enforcement: "suppress_and_count"
+        window: "5 minutes"
+
+      - name: "reading_retention_policy"
+        description: >
+          Raw sensor readings are retained for 90 days. After 90 days,
+          readings are downsampled to 1-minute averages and retained for
+          2 years. After 2 years, data is downsampled to 1-hour averages
+          and retained indefinitely.
+        entity: "SensorReading"
+        tiers:
+          - name: "raw"
+            retention: "90 days"
+            granularity: "original sampling interval"
+          - name: "downsampled_minute"
+            retention: "2 years"
+            granularity: "1 minute"
+            aggregations: ["avg", "min", "max", "count"]
+          - name: "downsampled_hour"
+            retention: "indefinite"
+            granularity: "1 hour"
+            aggregations: ["avg", "min", "max", "count"]
+
+      - name: "ingestion_backpressure"
+        description: >
+          When the ingestion pipeline falls behind (latency between
+          SensorReading.timestamp and SensorReading.ingested_at exceeds
+          30 seconds), backpressure signals are sent to edge gateways
+          to buffer readings locally.
+        scope: "global"
+        rule: "ingestion_latency > 30 seconds triggers backpressure"
+        monitoring:
+          metric: "ingestion_latency_p99"
+          alert_threshold: "30 seconds"
+
+      - name: "alert_storm_protection"
+        description: >
+          When more than 50 alerts are generated at a single facility
+          within a 1-minute window, alert storm protection activates.
+          Subsequent alerts are batched and a single summary alert is
+          generated instead of individual alerts.
+        scope: "per_facility"
+        rule: "more than 50 alerts per minute triggers storm protection"
+        enforcement: "batch_and_summarize"
+        window: "1 minute"
+        threshold: 50
+
+  # ===========================================================================
+  # SUB-IR 5: ACTIONS
+  # ===========================================================================
+  # Named operations that agents and users can perform. Each action declares
+  # its preconditions, effects, and authorization requirements.
+  # ===========================================================================
+  actions:
+    - name: "acknowledge_alert"
+      description: "Mark an alert as acknowledged, recording who acknowledged it and when."
+      entity: "Alert"
+      required_role: ["operator", "maintenance_tech", "engineer", "facility_manager", "admin"]
+      preconditions:
+        - "alert.status = 'raised'"
+        - "user has assignment at alert.facility_id"
+      effects:
+        - "alert.status -> 'acknowledged'"
+        - "alert.acknowledged_at -> now()"
+        - "alert.acknowledged_by -> current_user_id"
+      emits_event: "alert_acknowledged"
+
+    - name: "resolve_alert"
+      description: "Mark an alert as resolved with resolution notes."
+      entity: "Alert"
+      required_role: ["engineer", "facility_manager", "admin"]
+      preconditions:
+        - "alert.status in ('acknowledged', 'investigating')"
+        - "resolution_notes is provided"
+      parameters:
+        - name: "resolution_notes"
+          type: "string"
+          required: true
+      effects:
+        - "alert.status -> 'resolved'"
+        - "alert.resolved_at -> now()"
+        - "alert.resolved_by -> current_user_id"
+        - "alert.resolution_notes -> provided notes"
+      emits_event: "alert_resolved"
+
+    - name: "dismiss_alert"
+      description: "Dismiss an alert as a false positive or non-actionable."
+      entity: "Alert"
+      required_role: ["engineer", "facility_manager", "admin"]
+      preconditions:
+        - "alert.status in ('raised', 'acknowledged', 'investigating')"
+        - "resolution_notes explaining dismissal is provided"
+      parameters:
+        - name: "resolution_notes"
+          type: "string"
+          required: true
+      effects:
+        - "alert.status -> 'dismissed'"
+        - "alert.resolved_at -> now()"
+        - "alert.resolved_by -> current_user_id"
+      emits_event: "alert_dismissed"
+
+    - name: "calibrate_sensor"
+      description: >
+        Record a sensor calibration event. Updates calibration metadata
+        and resets quality flags on subsequent readings.
+      entity: "Sensor"
+      required_role: ["engineer", "admin"]
+      preconditions:
+        - "sensor.status != 'decommissioned'"
+        - "user has engineer assignment at sensor.device.facility_id"
+      parameters:
+        - name: "calibration_standard"
+          type: "string"
+          required: false
+        - name: "offset"
+          type: "float"
+          required: false
+        - name: "scale_factor"
+          type: "float"
+          required: false
+        - name: "next_calibration_due"
+          type: "datetime"
+          required: true
+      effects:
+        - "sensor.calibration.last_calibrated_at -> now()"
+        - "sensor.calibration.calibration_due_at -> next_calibration_due"
+        - "sensor.calibration.offset -> provided offset (if given)"
+        - "sensor.calibration.scale_factor -> provided scale_factor (if given)"
+        - "sensor.status -> 'active' (if was 'calibrating')"
+      emits_event: "sensor_calibrated"
+
+    - name: "set_alert_threshold"
+      description: "Update the alert thresholds for a sensor."
+      entity: "Sensor"
+      required_role: ["engineer", "facility_manager", "admin"]
+      preconditions:
+        - "sensor.status != 'decommissioned'"
+      parameters:
+        - name: "warning_low"
+          type: "float"
+          required: false
+        - name: "warning_high"
+          type: "float"
+          required: false
+        - name: "critical_low"
+          type: "float"
+          required: false
+        - name: "critical_high"
+          type: "float"
+          required: false
+        - name: "rate_of_change_limit"
+          type: "float"
+          required: false
+      effects:
+        - "sensor.thresholds updated with provided values"
+      emits_event: "threshold_updated"
+      validation:
+        - "critical_low <= warning_low <= warning_high <= critical_high (when all set)"
+
+    - name: "create_maintenance_order"
+      description: "Create a new maintenance work order for a device."
+      entity: "MaintenanceOrder"
+      required_role: ["maintenance_tech", "engineer", "facility_manager", "admin"]
+      preconditions:
+        - "device.operational_state != 'decommissioned'"
+        - "user has assignment at device.facility_id"
+      parameters:
+        - name: "device_id"
+          type: "uuid"
+          required: true
+        - name: "order_type"
+          type: "enum"
+          required: true
+        - name: "priority"
+          type: "enum"
+          required: true
+        - name: "title"
+          type: "string"
+          required: true
+        - name: "description"
+          type: "string"
+          required: true
+        - name: "alert_id"
+          type: "uuid"
+          required: false
+        - name: "requires_device_shutdown"
+          type: "boolean"
+          required: true
+      effects:
+        - "new MaintenanceOrder created with status 'requested'"
+        - "MaintenanceOrder.requested_by -> current_user_id"
+        - "MaintenanceOrder.created_at -> now()"
+      emits_event: "maintenance_order_created"
+
+    - name: "approve_maintenance_order"
+      description: "Approve a maintenance order that requires facility manager sign-off."
+      entity: "MaintenanceOrder"
+      required_role: ["facility_manager", "admin"]
+      preconditions:
+        - "order.status = 'pending_approval'"
+        - "user has facility_manager assignment at order.facility_id"
+      effects:
+        - "order.status -> 'approved'"
+        - "order.approved_at -> now()"
+        - "order.approved_by -> current_user_id"
+      emits_event: "maintenance_order_approved"
+
+    - name: "schedule_maintenance"
+      description: "Schedule an approved maintenance order for execution."
+      entity: "MaintenanceOrder"
+      required_role: ["engineer", "facility_manager", "admin"]
+      preconditions:
+        - "order.status in ('approved', 'requested') — 'requested' only if below cost threshold"
+      parameters:
+        - name: "assigned_to"
+          type: "string"
+          required: true
+          description: "User ID of the maintenance technician."
+        - name: "scheduled_start"
+          type: "datetime"
+          required: true
+        - name: "scheduled_end"
+          type: "datetime"
+          required: true
+      effects:
+        - "order.status -> 'scheduled'"
+        - "order.assigned_to -> provided user_id"
+        - "order.scheduled_start -> provided start"
+        - "order.scheduled_end -> provided end"
+      emits_event: "maintenance_order_scheduled"
+
+    - name: "commission_device"
+      description: >
+        Register and activate a new device. Follows the commissioning
+        workflow: register, configure sensors, test, activate.
+      entity: "Device"
+      required_role: ["engineer", "admin"]
+      preconditions:
+        - "device does not already exist with same serial_number"
+        - "user has engineer assignment at target facility"
+      parameters:
+        - name: "facility_id"
+          type: "uuid"
+          required: true
+        - name: "device_type"
+          type: "enum"
+          required: true
+        - name: "name"
+          type: "string"
+          required: true
+        - name: "serial_number"
+          type: "string"
+          required: true
+        - name: "criticality"
+          type: "enum"
+          required: true
+      effects:
+        - "new Device created with operational_state 'offline'"
+        - "device.installed_at -> now()"
+      emits_event: "device_commissioned"
+
+    - name: "decommission_device"
+      description: >
+        Permanently decommission a device. This is a terminal state —
+        the device cannot be reactivated. All associated sensors are
+        also decommissioned.
+      entity: "Device"
+      required_role: ["engineer", "facility_manager", "admin"]
+      preconditions:
+        - "device.operational_state != 'decommissioned'"
+        - "no active (non-cancelled, non-completed) maintenance orders exist for this device"
+      parameters:
+        - name: "reason"
+          type: "string"
+          required: true
+      effects:
+        - "device.operational_state -> 'decommissioned'"
+        - "all sensors on device -> status 'decommissioned'"
+        - "all raised/acknowledged alerts for device -> status 'auto_resolved'"
+      emits_event: "device_decommissioned"
+
+  # ===========================================================================
+  # SUB-IR 6: EVENTS
+  # ===========================================================================
+  # Domain events that flow through the event bus. Distinguishes between
+  # high-volume telemetry events and lower-volume operational events.
+  # Each event declares its payload schema and routing metadata.
+  # ===========================================================================
+  events:
+    # --- High-volume telemetry events ---
+    - name: "sensor_reading_received"
+      description: >
+        Emitted for every sensor reading ingested into the platform.
+        THIS IS THE STRESS TEST EVENT — volume can reach millions per hour
+        per facility. Consumers must handle backpressure gracefully.
+      category: "telemetry"
+      volume: "extreme"
+      volume_estimate: "10,000 - 1,000,000 per minute per facility"
+      payload:
+        - field: "reading_id"
+          type: "uuid"
+        - field: "sensor_id"
+          type: "uuid"
+        - field: "device_id"
+          type: "uuid"
+        - field: "facility_id"
+          type: "uuid"
+        - field: "timestamp"
+          type: "datetime"
+        - field: "value"
+          type: "float"
+        - field: "quality"
+          type: "enum"
+        - field: "anomaly_score"
+          type: "float"
+          nullable: true
+      routing:
+        partition_key: "facility_id"
+        ordering: "timestamp"
+      retention: "24 hours in event bus, then archived"
+      consumers:
+        - "monitoring_agent"
+        - "anomaly_detection_pipeline"
+        - "dashboard_websocket_feed"
+
+    # --- Anomaly and threshold events ---
+    - name: "temperature_threshold_exceeded"
+      description: "A temperature sensor reading breached its configured threshold."
+      category: "alert_trigger"
+      volume: "moderate"
+      payload:
+        - field: "sensor_id"
+          type: "uuid"
+        - field: "device_id"
+          type: "uuid"
+        - field: "facility_id"
+          type: "uuid"
+        - field: "reading_value"
+          type: "float"
+        - field: "threshold_value"
+          type: "float"
+        - field: "threshold_type"
+          type: "enum"
+          values: ["warning_high", "warning_low", "critical_high", "critical_low"]
+        - field: "timestamp"
+          type: "datetime"
+      triggers_action: "generate_alert"
+
+    - name: "vibration_anomaly_detected"
+      description: >
+        Anomaly detection identified an unusual vibration pattern — could
+        indicate bearing wear, misalignment, or structural issues.
+      category: "alert_trigger"
+      volume: "low"
+      payload:
+        - field: "sensor_id"
+          type: "uuid"
+        - field: "device_id"
+          type: "uuid"
+        - field: "facility_id"
+          type: "uuid"
+        - field: "anomaly_score"
+          type: "float"
+        - field: "pattern_type"
+          type: "string"
+          description: "Detected pattern name (e.g., 'harmonic_resonance', 'impact_impulse', 'gradual_increase')."
+        - field: "baseline_value"
+          type: "float"
+        - field: "current_value"
+          type: "float"
+        - field: "timestamp"
+          type: "datetime"
+      triggers_action: "generate_alert"
+
+    - name: "rate_of_change_exceeded"
+      description: >
+        A sensor's reading changed faster than its configured rate_of_change_limit.
+        Indicates a rapid environmental shift or potential sensor fault.
+      category: "alert_trigger"
+      volume: "moderate"
+      payload:
+        - field: "sensor_id"
+          type: "uuid"
+        - field: "device_id"
+          type: "uuid"
+        - field: "facility_id"
+          type: "uuid"
+        - field: "rate_of_change"
+          type: "float"
+          description: "Measured change per minute."
+        - field: "rate_limit"
+          type: "float"
+          description: "Configured maximum change per minute."
+        - field: "timestamp"
+          type: "datetime"
+      triggers_action: "generate_alert"
+
+    # --- Device lifecycle events ---
+    - name: "device_offline"
+      description: "A device transitioned to offline state — communication lost or intentional shutdown."
+      category: "device_lifecycle"
+      volume: "low"
+      payload:
+        - field: "device_id"
+          type: "uuid"
+        - field: "facility_id"
+          type: "uuid"
+        - field: "previous_state"
+          type: "enum"
+        - field: "reason"
+          type: "string"
+          nullable: true
+        - field: "timestamp"
+          type: "datetime"
+      triggers_action: "generate_alert"
+
+    - name: "device_state_changed"
+      description: "A device transitioned between operational states."
+      category: "device_lifecycle"
+      volume: "low"
+      payload:
+        - field: "device_id"
+          type: "uuid"
+        - field: "facility_id"
+          type: "uuid"
+        - field: "from_state"
+          type: "enum"
+        - field: "to_state"
+          type: "enum"
+        - field: "changed_by"
+          type: "string"
+        - field: "reason"
+          type: "string"
+          nullable: true
+        - field: "timestamp"
+          type: "datetime"
+
+    - name: "device_commissioned"
+      description: "A new device was registered and configured at a facility."
+      category: "device_lifecycle"
+      volume: "rare"
+      payload:
+        - field: "device_id"
+          type: "uuid"
+        - field: "facility_id"
+          type: "uuid"
+        - field: "device_type"
+          type: "enum"
+        - field: "serial_number"
+          type: "string"
+        - field: "commissioned_by"
+          type: "string"
+        - field: "timestamp"
+          type: "datetime"
+
+    - name: "device_decommissioned"
+      description: "A device was permanently taken out of service."
+      category: "device_lifecycle"
+      volume: "rare"
+      payload:
+        - field: "device_id"
+          type: "uuid"
+        - field: "facility_id"
+          type: "uuid"
+        - field: "reason"
+          type: "string"
+        - field: "decommissioned_by"
+          type: "string"
+        - field: "sensors_decommissioned"
+          type: "integer"
+          description: "Count of sensors also decommissioned."
+        - field: "timestamp"
+          type: "datetime"
+
+    # --- Alert lifecycle events ---
+    - name: "alert_raised"
+      description: "A new alert was generated by the system."
+      category: "alert_lifecycle"
+      volume: "moderate"
+      payload:
+        - field: "alert_id"
+          type: "uuid"
+        - field: "device_id"
+          type: "uuid"
+        - field: "sensor_id"
+          type: "uuid"
+          nullable: true
+        - field: "facility_id"
+          type: "uuid"
+        - field: "alert_type"
+          type: "enum"
+        - field: "severity"
+          type: "enum"
+        - field: "title"
+          type: "string"
+        - field: "trigger_value"
+          type: "float"
+          nullable: true
+        - field: "timestamp"
+          type: "datetime"
+
+    - name: "alert_acknowledged"
+      description: "An alert was acknowledged by an operator or engineer."
+      category: "alert_lifecycle"
+      volume: "moderate"
+      payload:
+        - field: "alert_id"
+          type: "uuid"
+        - field: "acknowledged_by"
+          type: "string"
+        - field: "acknowledgement_latency_seconds"
+          type: "integer"
+          description: "Time from raised_at to acknowledged_at in seconds."
+        - field: "timestamp"
+          type: "datetime"
+
+    - name: "alert_resolved"
+      description: "An alert was resolved with resolution notes."
+      category: "alert_lifecycle"
+      volume: "moderate"
+      payload:
+        - field: "alert_id"
+          type: "uuid"
+        - field: "resolved_by"
+          type: "string"
+        - field: "resolution_notes"
+          type: "string"
+        - field: "total_duration_seconds"
+          type: "integer"
+          description: "Time from raised_at to resolved_at."
+        - field: "timestamp"
+          type: "datetime"
+
+    - name: "alert_escalated"
+      description: "An alert was escalated due to missed acknowledgement SLA."
+      category: "alert_lifecycle"
+      volume: "low"
+      payload:
+        - field: "alert_id"
+          type: "uuid"
+        - field: "facility_id"
+          type: "uuid"
+        - field: "escalation_level"
+          type: "integer"
+        - field: "sla_breach_minutes"
+          type: "float"
+          description: "How many minutes past the SLA deadline."
+        - field: "timestamp"
+          type: "datetime"
+
+    # --- Maintenance events ---
+    - name: "maintenance_order_created"
+      description: "A new maintenance work order was created."
+      category: "maintenance"
+      volume: "low"
+      payload:
+        - field: "order_id"
+          type: "uuid"
+        - field: "device_id"
+          type: "uuid"
+        - field: "facility_id"
+          type: "uuid"
+        - field: "order_type"
+          type: "enum"
+        - field: "priority"
+          type: "enum"
+        - field: "requested_by"
+          type: "string"
+        - field: "alert_id"
+          type: "uuid"
+          nullable: true
+        - field: "timestamp"
+          type: "datetime"
+
+    - name: "maintenance_order_approved"
+      description: "A maintenance order was approved by a facility manager."
+      category: "maintenance"
+      volume: "low"
+      payload:
+        - field: "order_id"
+          type: "uuid"
+        - field: "approved_by"
+          type: "string"
+        - field: "estimated_cost"
+          type: "float"
+        - field: "timestamp"
+          type: "datetime"
+
+    - name: "maintenance_order_completed"
+      description: "A maintenance order was marked as completed by the assigned technician."
+      category: "maintenance"
+      volume: "low"
+      payload:
+        - field: "order_id"
+          type: "uuid"
+        - field: "device_id"
+          type: "uuid"
+        - field: "completed_by"
+          type: "string"
+        - field: "actual_duration_hours"
+          type: "float"
+        - field: "actual_cost"
+          type: "float"
+          nullable: true
+        - field: "timestamp"
+          type: "datetime"
+
+    # --- Sensor events ---
+    - name: "sensor_calibrated"
+      description: "A sensor was recalibrated with updated calibration metadata."
+      category: "sensor_lifecycle"
+      volume: "rare"
+      payload:
+        - field: "sensor_id"
+          type: "uuid"
+        - field: "device_id"
+          type: "uuid"
+        - field: "calibrated_by"
+          type: "string"
+        - field: "previous_offset"
+          type: "float"
+          nullable: true
+        - field: "new_offset"
+          type: "float"
+          nullable: true
+        - field: "previous_scale_factor"
+          type: "float"
+          nullable: true
+        - field: "new_scale_factor"
+          type: "float"
+          nullable: true
+        - field: "next_calibration_due"
+          type: "datetime"
+        - field: "timestamp"
+          type: "datetime"
+
+    - name: "threshold_updated"
+      description: "Alert thresholds for a sensor were modified."
+      category: "sensor_lifecycle"
+      volume: "rare"
+      payload:
+        - field: "sensor_id"
+          type: "uuid"
+        - field: "updated_by"
+          type: "string"
+        - field: "previous_thresholds"
+          type: "object"
+        - field: "new_thresholds"
+          type: "object"
+        - field: "timestamp"
+          type: "datetime"
+
+  # ===========================================================================
+  # SUB-IR 7: WORKFLOWS
+  # ===========================================================================
+  # Multi-step processes that coordinate actions, events, and state changes.
+  # Each workflow defines its stages, transitions, timeouts, and participants.
+  # ===========================================================================
+  workflows:
+    - name: "anomaly_response"
+      description: >
+        End-to-end workflow for responding to detected anomalies.
+        From initial detection through investigation to resolution.
+      trigger:
+        event: "alert_raised"
+        condition: "alert_type in ('anomaly_detected', 'threshold_breach', 'rate_of_change')"
+      stages:
+        - name: "detect"
+          description: "Anomaly detection pipeline identifies unusual pattern in sensor readings."
+          automated: true
+          actions:
+            - "analyze recent readings for the triggering sensor"
+            - "compute anomaly_score using baseline model"
+            - "determine alert severity based on anomaly_score and device criticality"
+          outputs:
+            - "alert created with status 'raised'"
+          timeout: null
+          next: "alert"
+
+        - name: "alert"
+          description: "Alert is raised and notifications dispatched."
+          automated: true
+          actions:
+            - "create Alert entity"
+            - "emit alert_raised event"
+            - "notify operators and engineers assigned to the facility"
+          outputs:
+            - "notifications sent"
+          timeout: null
+          next: "acknowledge"
+
+        - name: "acknowledge"
+          description: "Human operator or engineer acknowledges the alert."
+          automated: false
+          required_role: ["operator", "engineer", "facility_manager"]
+          actions:
+            - "acknowledge_alert"
+          timeout:
+            duration: "15 minutes"
+            on_timeout: "escalate to facility_manager"
+          next: "investigate"
+
+        - name: "investigate"
+          description: >
+            Engineer investigates root cause — reviews sensor history,
+            checks related devices, correlates with other alerts.
+          automated: false
+          required_role: ["engineer", "facility_manager"]
+          actions:
+            - "query historical readings for context"
+            - "check correlated alerts in same correlation_group"
+            - "inspect device operational state and maintenance history"
+          timeout:
+            duration: "4 hours"
+            on_timeout: "escalate to facility_manager"
+          next:
+            - condition: "root cause identified and fix applied"
+              target: "resolve"
+            - condition: "maintenance required"
+              target: "create_maintenance_order"
+            - condition: "false positive"
+              target: "dismiss"
+
+        - name: "create_maintenance_order"
+          description: "If investigation reveals maintenance is needed, create a work order."
+          automated: false
+          required_role: ["engineer", "facility_manager"]
+          actions:
+            - "create_maintenance_order linked to this alert"
+          next: "resolve"
+
+        - name: "resolve"
+          description: "Alert is resolved with documentation of root cause and actions taken."
+          automated: false
+          required_role: ["engineer", "facility_manager"]
+          actions:
+            - "resolve_alert with resolution_notes"
+          outputs:
+            - "alert status -> 'resolved'"
+            - "alert_resolved event emitted"
+          next: null
+
+        - name: "dismiss"
+          description: "Alert is dismissed as a false positive."
+          automated: false
+          required_role: ["engineer", "facility_manager"]
+          actions:
+            - "dismiss_alert with explanation"
+          outputs:
+            - "alert status -> 'dismissed'"
+            - "alert_dismissed event emitted"
+          next: null
+
+    - name: "maintenance_approval"
+      description: >
+        Workflow for maintenance order lifecycle from request through
+        execution and verification. Includes cost-based approval gates.
+      trigger:
+        event: "maintenance_order_created"
+      stages:
+        - name: "request"
+          description: "Maintenance order is created and initial details captured."
+          automated: false
+          actions:
+            - "create_maintenance_order"
+          outputs:
+            - "order with status 'requested'"
+          next: "estimate"
+
+        - name: "estimate"
+          description: "Engineer or technician provides cost and time estimates."
+          automated: false
+          required_role: ["maintenance_tech", "engineer"]
+          actions:
+            - "update estimated_cost"
+            - "update estimated_duration_hours"
+            - "specify parts_required"
+          outputs:
+            - "order with status 'estimated'"
+          next:
+            - condition: "estimated_cost > 5000"
+              target: "approve"
+            - condition: "estimated_cost <= 5000"
+              target: "schedule"
+
+        - name: "approve"
+          description: "Facility manager reviews and approves high-cost orders."
+          automated: false
+          required_role: ["facility_manager", "admin"]
+          actions:
+            - "approve_maintenance_order"
+          timeout:
+            duration: "24 hours"
+            on_timeout: "escalate to admin"
+          next:
+            - condition: "approved"
+              target: "schedule"
+            - condition: "rejected"
+              target: "cancelled"
+
+        - name: "schedule"
+          description: "Order is scheduled and assigned to a maintenance technician."
+          automated: false
+          required_role: ["engineer", "facility_manager"]
+          actions:
+            - "schedule_maintenance"
+            - "assign maintenance_tech"
+            - "set scheduled_start and scheduled_end"
+          outputs:
+            - "order with status 'scheduled'"
+            - "notification sent to assigned technician"
+          next: "execute"
+
+        - name: "execute"
+          description: "Technician performs the maintenance work."
+          automated: false
+          required_role: ["maintenance_tech"]
+          actions:
+            - "set device to 'maintenance' state if requires_device_shutdown"
+            - "perform maintenance work"
+            - "record actual_duration_hours and actual_cost"
+            - "update order status to 'completed'"
+          outputs:
+            - "order with status 'completed'"
+            - "maintenance_order_completed event emitted"
+          next: "verify"
+
+        - name: "verify"
+          description: >
+            Engineer or facility manager verifies the maintenance was
+            performed correctly and the device is operating normally.
+          automated: false
+          required_role: ["engineer", "facility_manager"]
+          actions:
+            - "inspect device and sensor readings post-maintenance"
+            - "restore device to 'online' state"
+            - "record verification_notes"
+            - "update order status to 'verified'"
+          timeout:
+            duration: "48 hours"
+            on_timeout: "escalate to facility_manager"
+          outputs:
+            - "order with status 'verified'"
+            - "device state restored"
+          next: null
+
+        - name: "cancelled"
+          description: "Order was cancelled (rejected approval or other reason)."
+          automated: false
+          outputs:
+            - "order with status 'cancelled'"
+          next: null
+
+    - name: "device_commissioning"
+      description: >
+        Workflow for bringing a new device online. Covers registration,
+        sensor configuration, testing, and activation.
+      trigger:
+        action: "commission_device"
+      stages:
+        - name: "register"
+          description: "Register the device in the system with its metadata."
+          automated: false
+          required_role: ["engineer"]
+          actions:
+            - "commission_device"
+          outputs:
+            - "device created with operational_state 'offline'"
+            - "device_commissioned event emitted"
+          next: "configure"
+
+        - name: "configure"
+          description: >
+            Install and configure sensors on the device. Set up alert
+            thresholds and sampling intervals.
+          automated: false
+          required_role: ["engineer"]
+          actions:
+            - "create Sensor entities for each sensor on the device"
+            - "set_alert_threshold for each sensor"
+            - "calibrate_sensor for each sensor"
+          outputs:
+            - "sensors created with status 'active'"
+            - "thresholds configured"
+            - "calibration metadata recorded"
+          next: "test"
+
+        - name: "test"
+          description: >
+            Run the device in test mode — verify sensors are producing
+            readings within expected ranges and data is flowing to the platform.
+          automated: false
+          required_role: ["engineer"]
+          actions:
+            - "set device to 'online' temporarily for testing"
+            - "verify sensor readings are being received"
+            - "verify data quality is 'good'"
+            - "verify alert thresholds trigger correctly"
+          timeout:
+            duration: "4 hours"
+            on_timeout: "notify engineer to complete testing"
+          outputs:
+            - "test results documented"
+          next:
+            - condition: "all tests pass"
+              target: "activate"
+            - condition: "tests fail"
+              target: "configure"
+
+        - name: "activate"
+          description: "Device is fully operational and enters production monitoring."
+          automated: false
+          required_role: ["engineer", "facility_manager"]
+          actions:
+            - "set device operational_state to 'online'"
+            - "enable alert generation for this device"
+            - "add device to facility dashboards"
+          outputs:
+            - "device operational_state = 'online'"
+            - "device fully integrated into monitoring"
+          next: null
+
+    - name: "alert_escalation"
+      description: >
+        Automated escalation workflow that runs when alert acknowledgement
+        SLAs are breached. Progressive escalation through organizational hierarchy.
+      trigger:
+        event: "alert_escalated"
+      stages:
+        - name: "level_1_escalation"
+          description: "First escalation — notify facility operators more urgently."
+          automated: true
+          condition: "escalation_level = 1"
+          actions:
+            - "send urgent notification to all operators at facility"
+            - "send notification to facility engineers"
+          timeout:
+            duration: "15 minutes"
+            on_timeout: "proceed to level_2"
+          next: "level_2_escalation"
+
+        - name: "level_2_escalation"
+          description: "Second escalation — notify facility manager directly."
+          automated: true
+          condition: "escalation_level = 2"
+          actions:
+            - "send direct notification to facility_manager"
+            - "increment escalation_level"
+          timeout:
+            duration: "15 minutes"
+            on_timeout: "proceed to level_3"
+          next: "level_3_escalation"
+
+        - name: "level_3_escalation"
+          description: "Third escalation — notify platform admin. Indicates systemic issue."
+          automated: true
+          condition: "escalation_level >= 3"
+          actions:
+            - "send notification to admin"
+            - "flag facility for review"
+            - "create incident record"
+          next: null
+
+  # ===========================================================================
+  # SUB-IR 8: AGENT CAPABILITIES
+  # ===========================================================================
+  # Defines what AI agents can do within this domain. Each agent has a scope,
+  # allowed actions, data access patterns, and event subscriptions.
+  # ===========================================================================
+  agent_capabilities:
+    - name: "monitoring_agent"
+      description: >
+        Real-time monitoring agent that continuously processes sensor readings,
+        detects anomalies, identifies patterns, and generates alerts. This is
+        the highest-throughput agent — it must handle the full sensor_reading_received
+        event stream.
+      type: "autonomous"
+      activation: "always_on"
+
+      allowed_actions:
+        - action: "acknowledge_alert"
+          conditions:
+            - "only for info-severity alerts"
+            - "only for auto-resolvable alert types (e.g., brief threshold breach that self-corrects)"
+        - action: "resolve_alert"
+          conditions:
+            - "only for alerts of type 'auto_resolved' (value returned to normal range)"
+            - "must include auto-generated resolution notes"
+
+      data_access:
+        read:
+          - entity: "SensorReading"
+            scope: "all facilities"
+            filter: "timestamp within last 24 hours"
+            description: "Access to recent readings for pattern detection."
+          - entity: "Sensor"
+            scope: "all facilities"
+            fields: ["sensor_id", "sensor_type", "thresholds", "calibration", "status"]
+            description: "Sensor configuration for threshold evaluation."
+          - entity: "Device"
+            scope: "all facilities"
+            fields: ["device_id", "operational_state", "criticality", "device_type"]
+            description: "Device context for alert severity determination."
+          - entity: "Alert"
+            scope: "all facilities"
+            filter: "status in ('raised', 'acknowledged')"
+            description: "Active alerts for deduplication and correlation."
+        write:
+          - entity: "Alert"
+            operations: ["create"]
+            description: "Generate new alerts when anomalies are detected."
+          - entity: "SensorReading"
+            operations: ["update"]
+            fields: ["anomaly_score"]
+            description: "Write anomaly scores back to readings."
+
+      event_subscriptions:
+        - event: "sensor_reading_received"
+          processing: "stream"
+          batch_size: 1000
+          max_latency: "5 seconds"
+          description: >
+            Primary input stream. Processes readings in batches for efficiency.
+            Must maintain less than 5 seconds end-to-end latency.
+        - event: "device_state_changed"
+          processing: "individual"
+          description: "Adjust monitoring behavior when devices change state."
+        - event: "threshold_updated"
+          processing: "individual"
+          description: "Reload threshold configuration when thresholds are modified."
+        - event: "sensor_calibrated"
+          processing: "individual"
+          description: "Reload calibration factors when sensors are recalibrated."
+
+      event_emissions:
+        - event: "temperature_threshold_exceeded"
+        - event: "vibration_anomaly_detected"
+        - event: "rate_of_change_exceeded"
+        - event: "alert_raised"
+        - event: "device_offline"
+
+      capabilities:
+        - name: "threshold_evaluation"
+          description: >
+            Compare each reading against the sensor's configured thresholds.
+            Generate threshold_breach alerts when limits are exceeded.
+          latency_requirement: "sub-second"
+
+        - name: "anomaly_detection"
+          description: >
+            Apply statistical and ML-based anomaly detection to reading streams.
+            Compute anomaly_score for each reading based on deviation from
+            learned baseline patterns.
+          latency_requirement: "under 5 seconds"
+          models:
+            - "rolling_zscore"
+            - "seasonal_decomposition"
+            - "isolation_forest"
+
+        - name: "pattern_correlation"
+          description: >
+            Correlate anomalies across multiple sensors on the same device
+            or across devices at the same facility. Group related alerts
+            into correlation_groups.
+          latency_requirement: "under 30 seconds"
+
+        - name: "alert_deduplication"
+          description: >
+            Suppress duplicate alerts using deduplication_key within the
+            configured deduplication window.
+          latency_requirement: "sub-second"
+
+        - name: "communication_loss_detection"
+          description: >
+            Detect when expected sensor readings stop arriving. If no reading
+            is received within 3x the sensor's sampling_interval_seconds,
+            generate a communication_loss alert.
+          latency_requirement: "under 1 minute"
+
+      resource_limits:
+        max_memory: "4 GB"
+        max_concurrent_streams: 10000
+        checkpoint_interval: "30 seconds"
+        description: >
+          Resource constraints for the monitoring agent. Must be able to
+          handle 10,000 concurrent sensor streams with in-memory state
+          for windowed computations.
+
+    - name: "maintenance_agent"
+      description: >
+        Assists with maintenance planning and execution. Can analyze
+        equipment history, predict failures, create maintenance orders,
+        and recommend optimal maintenance schedules.
+      type: "assistive"
+      activation: "on_demand"
+
+      allowed_actions:
+        - action: "create_maintenance_order"
+          conditions:
+            - "can create preventive and predictive maintenance orders"
+            - "reactive orders require human confirmation"
+            - "cannot set priority to 'emergency' (requires human)"
+        - action: "schedule_maintenance"
+          conditions:
+            - "can suggest schedules based on device availability windows"
+            - "final scheduling requires human approval"
+
+      data_access:
+        read:
+          - entity: "Device"
+            scope: "assigned_facilities"
+            description: "Full device information for maintenance analysis."
+          - entity: "MaintenanceOrder"
+            scope: "assigned_facilities"
+            description: "Historical maintenance orders for pattern analysis."
+          - entity: "SensorReading"
+            scope: "assigned_facilities"
+            filter: "downsampled_minute tier (not raw)"
+            description: "Aggregated readings for trend analysis. Raw data not needed."
+          - entity: "Alert"
+            scope: "assigned_facilities"
+            description: "Alert history for failure pattern analysis."
+          - entity: "Sensor"
+            scope: "assigned_facilities"
+            description: "Sensor configuration and calibration status."
+        write:
+          - entity: "MaintenanceOrder"
+            operations: ["create", "update"]
+            fields: ["title", "description", "order_type", "priority", "estimated_duration_hours", "parts_required"]
+            description: "Create and update maintenance orders with analysis findings."
+
+      event_subscriptions:
+        - event: "maintenance_order_created"
+          processing: "individual"
+          description: "Track new maintenance orders for scheduling optimization."
+        - event: "maintenance_order_completed"
+          processing: "individual"
+          description: "Record completion data for predictive model training."
+        - event: "device_state_changed"
+          processing: "individual"
+          description: "Track device state for availability window calculation."
+        - event: "alert_raised"
+          processing: "individual"
+          filter: "severity in ('critical', 'warning')"
+          description: "Analyze failure-related alerts for predictive maintenance."
+
+      event_emissions:
+        - event: "maintenance_order_created"
+
+      capabilities:
+        - name: "failure_prediction"
+          description: >
+            Analyze sensor reading trends and maintenance history to predict
+            when devices are likely to fail. Uses degradation curves derived
+            from historical data.
+          inputs:
+            - "sensor reading trends (downsampled)"
+            - "device accumulated_run_hours"
+            - "device expected_lifespan_hours"
+            - "historical maintenance order data"
+          outputs:
+            - "predicted failure window"
+            - "confidence level"
+            - "recommended maintenance action"
+
+        - name: "maintenance_schedule_optimization"
+          description: >
+            Optimize maintenance schedules to minimize device downtime while
+            ensuring preventive maintenance is performed on time. Considers
+            device criticality, maintenance technician availability, and
+            parts availability.
+          inputs:
+            - "pending maintenance orders"
+            - "device criticality"
+            - "technician assignments"
+            - "parts_required availability"
+          outputs:
+            - "optimized schedule proposal"
+            - "estimated total downtime"
+
+        - name: "equipment_history_analysis"
+          description: >
+            Summarize a device's operational history — failures, maintenance
+            performed, sensor trends, and alert patterns. Provides context
+            for maintenance decisions.
+          inputs:
+            - "device_id"
+          outputs:
+            - "equipment history summary"
+            - "recurring issue identification"
+            - "cost analysis"
+
+      resource_limits:
+        max_memory: "2 GB"
+        max_concurrent_requests: 50
+        description: >
+          Lower resource requirements than monitoring_agent since this agent
+          operates on-demand rather than processing continuous streams.
+
+    - name: "diagnostics_agent"
+      description: >
+        On-demand diagnostic agent invoked when engineers need deep analysis
+        of specific anomalies or device behavior. Performs root cause analysis
+        by correlating data across multiple sensors, devices, and time windows.
+      type: "assistive"
+      activation: "on_demand"
+
+      allowed_actions:
+        - action: "acknowledge_alert"
+          conditions:
+            - "can acknowledge alerts as part of investigation"
+        - action: "resolve_alert"
+          conditions:
+            - "can resolve alerts with diagnostic findings as resolution_notes"
+            - "requires engineer or facility_manager to confirm"
+
+      data_access:
+        read:
+          - entity: "SensorReading"
+            scope: "assigned_facilities"
+            filter: "all retention tiers — can access raw, minute, and hourly data"
+            description: "Deep access to historical readings for root cause analysis."
+          - entity: "Sensor"
+            scope: "assigned_facilities"
+            description: "Full sensor configuration including calibration history."
+          - entity: "Device"
+            scope: "assigned_facilities"
+            description: "Device metadata and state history."
+          - entity: "Alert"
+            scope: "assigned_facilities"
+            description: "Full alert history for correlation analysis."
+          - entity: "MaintenanceOrder"
+            scope: "assigned_facilities"
+            description: "Maintenance history for root cause investigation."
+        write: []
+
+      event_subscriptions: []
+
+      event_emissions: []
+
+      capabilities:
+        - name: "root_cause_analysis"
+          description: >
+            Given an alert or set of symptoms, trace back through sensor
+            readings, device states, and correlated events to identify the
+            most likely root cause.
+          inputs:
+            - "alert_id or symptom description"
+            - "time window for investigation"
+          outputs:
+            - "ranked list of probable root causes"
+            - "supporting evidence (readings, events, correlations)"
+            - "recommended corrective actions"
+
+        - name: "cross_device_correlation"
+          description: >
+            Analyze patterns across multiple devices at a facility to detect
+            systemic issues (e.g., facility-wide power quality problems
+            affecting multiple devices simultaneously).
+          inputs:
+            - "facility_id"
+            - "time window"
+            - "anomaly type (optional)"
+          outputs:
+            - "correlated anomaly groups"
+            - "shared root cause hypothesis"
+
+        - name: "sensor_health_assessment"
+          description: >
+            Evaluate whether a sensor is producing reliable data by analyzing
+            noise levels, drift patterns, and comparison with co-located sensors.
+            Distinguishes between genuine anomalies and sensor faults.
+          inputs:
+            - "sensor_id"
+          outputs:
+            - "sensor health score"
+            - "drift assessment"
+            - "recommendation (continue, recalibrate, replace)"
+
+      resource_limits:
+        max_memory: "8 GB"
+        max_query_time: "5 minutes"
+        description: >
+          Higher memory allocation for deep analysis — may need to load
+          and cross-reference large time windows of historical data.

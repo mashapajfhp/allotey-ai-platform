@@ -1,0 +1,298 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://allotey.ai/schemas/ir/event-ir.schema.json",
+  "title": "Event IR",
+  "description": "Defines domain events, their payloads, triggers, subscriptions, and event-driven patterns for the domain.",
+  "type": "object",
+  "required": ["events"],
+  "additionalProperties": false,
+  "properties": {
+    "events": {
+      "type": "array",
+      "description": "All domain events.",
+      "items": { "$ref": "#/definitions/event" },
+      "minItems": 1
+    },
+    "subscriptions": {
+      "type": "array",
+      "description": "Event subscription rules defining what happens when events fire.",
+      "items": { "$ref": "#/definitions/subscription" }
+    },
+    "channels": {
+      "type": "array",
+      "description": "Named event channels for routing and partitioning.",
+      "items": { "$ref": "#/definitions/channel" }
+    }
+  },
+  "definitions": {
+    "event": {
+      "type": "object",
+      "required": ["name", "entity"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique event name. Convention: EntityVerbed (e.g., 'AppointmentScheduled', 'DeviceAlertTriggered').",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable explanation of when and why this event fires."
+        },
+        "entity": {
+          "type": "string",
+          "description": "Primary entity associated with this event.",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "trigger": {
+          "$ref": "#/definitions/trigger",
+          "description": "What causes this event to fire."
+        },
+        "payload": {
+          "type": "array",
+          "description": "Data included in the event payload.",
+          "items": { "$ref": "#/definitions/payloadField" }
+        },
+        "channel": {
+          "type": "string",
+          "description": "Event channel this event is published to."
+        },
+        "priority": {
+          "type": "string",
+          "description": "Processing priority.",
+          "enum": ["low", "normal", "high", "critical"],
+          "default": "normal"
+        },
+        "retention": {
+          "type": "string",
+          "description": "How long to retain this event (ISO 8601 duration, e.g., 'P30D', 'P1Y')."
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "What type of change fires this event.",
+          "enum": [
+            "on_create",
+            "on_update",
+            "on_delete",
+            "on_state_change",
+            "on_schedule",
+            "on_threshold",
+            "on_action",
+            "manual"
+          ]
+        },
+        "action": {
+          "type": "string",
+          "description": "Action name for 'on_action' triggers."
+        },
+        "fromState": {
+          "type": "string",
+          "description": "Previous state for 'on_state_change' triggers."
+        },
+        "toState": {
+          "type": "string",
+          "description": "New state for 'on_state_change' triggers."
+        },
+        "stateProperty": {
+          "type": "string",
+          "description": "Property that represents state."
+        },
+        "schedule": {
+          "type": "string",
+          "description": "Cron expression for 'on_schedule' triggers."
+        },
+        "thresholdProperty": {
+          "type": "string",
+          "description": "Property to monitor for 'on_threshold' triggers."
+        },
+        "thresholdOperator": {
+          "type": "string",
+          "enum": ["gt", "gte", "lt", "lte", "equals", "outside_range"]
+        },
+        "thresholdValue": {
+          "description": "Threshold value."
+        },
+        "thresholdValueHigh": {
+          "description": "Upper bound for 'outside_range' operator."
+        },
+        "condition": {
+          "type": "string",
+          "description": "Additional condition that must be true for the event to fire."
+        },
+        "debounceSeconds": {
+          "type": "integer",
+          "description": "Minimum interval between repeated firings.",
+          "minimum": 0
+        }
+      }
+    },
+    "payloadField": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-zA-Z0-9]*$"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["string", "integer", "number", "boolean", "date", "timestamp", "reference", "object", "array"]
+        },
+        "description": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "description": "Property path on the entity to extract the value from (e.g., 'entity.patientId')."
+        },
+        "referenceTo": {
+          "type": "string",
+          "description": "Entity type for reference fields.",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "includeSnapshot": {
+          "type": "boolean",
+          "description": "Whether to include the full entity snapshot in the payload.",
+          "default": false
+        }
+      }
+    },
+    "subscription": {
+      "type": "object",
+      "required": ["name", "event", "handler"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique subscription name.",
+          "pattern": "^[a-z][a-zA-Z0-9]*$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string",
+          "description": "Event name to subscribe to.",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "events": {
+          "type": "array",
+          "description": "Multiple events to subscribe to (alternative to single event).",
+          "items": { "type": "string" }
+        },
+        "filter": {
+          "type": "string",
+          "description": "Expression to filter which event instances to handle."
+        },
+        "handler": {
+          "$ref": "#/definitions/handler",
+          "description": "What to do when the event fires."
+        },
+        "ordering": {
+          "type": "string",
+          "description": "Delivery ordering guarantee.",
+          "enum": ["unordered", "per_entity", "global"],
+          "default": "per_entity"
+        },
+        "maxRetries": {
+          "type": "integer",
+          "description": "Maximum retry attempts on failure.",
+          "minimum": 0,
+          "default": 3
+        },
+        "deadLetterAfterRetries": {
+          "type": "boolean",
+          "description": "Whether to move to dead letter queue after max retries.",
+          "default": true
+        }
+      }
+    },
+    "handler": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Handler type.",
+          "enum": [
+            "invoke_action",
+            "start_workflow",
+            "send_notification",
+            "update_entity",
+            "create_entity",
+            "invoke_agent",
+            "log",
+            "custom"
+          ]
+        },
+        "action": {
+          "type": "string",
+          "description": "Action name for 'invoke_action' handlers."
+        },
+        "workflow": {
+          "type": "string",
+          "description": "Workflow name for 'start_workflow' handlers."
+        },
+        "entity": {
+          "type": "string",
+          "description": "Target entity for 'update_entity' or 'create_entity' handlers."
+        },
+        "agentCapability": {
+          "type": "string",
+          "description": "Agent capability to invoke."
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Parameters passed to the handler.",
+          "additionalProperties": true
+        },
+        "mapping": {
+          "type": "object",
+          "description": "Mapping from event payload fields to handler parameters.",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "channel": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Channel name.",
+          "pattern": "^[a-z][a-z_0-9]*$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "partitionBy": {
+          "type": "string",
+          "description": "Property to partition events by (e.g., 'tenantId', 'deviceId')."
+        },
+        "ordered": {
+          "type": "boolean",
+          "description": "Whether events in this channel must be delivered in order.",
+          "default": false
+        },
+        "retention": {
+          "type": "string",
+          "description": "Default retention for events in this channel (ISO 8601 duration)."
+        }
+      }
+    }
+  }
+}

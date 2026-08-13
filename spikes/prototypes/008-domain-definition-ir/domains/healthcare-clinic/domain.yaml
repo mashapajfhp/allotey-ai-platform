@@ -1,0 +1,2834 @@
+# =============================================================================
+# Healthcare Clinic Scheduling — Domain Definition IR
+# =============================================================================
+# Domain A: Regulated transactional patterns
+# Tests: Entity CRUD, governance, approval workflows, compliance policies
+# =============================================================================
+
+domain_definition:
+  name: "healthcare-clinic"
+  version: "1.0.0"
+  ir_schema_version: "0.1.0"
+  description: >
+    Healthcare clinic scheduling domain covering patient management,
+    practitioner scheduling, appointment lifecycle, insurance verification,
+    and referral workflows. Exercises regulated transactional patterns
+    including HIPAA-compliant data handling, approval workflows, and
+    multi-role authorization with relationship-based access control.
+
+  # ===========================================================================
+  # 1. ONTOLOGY — Entity model, relationships, and data classification
+  # ===========================================================================
+  ontology:
+    entities:
+      - name: "patient"
+        description: "An individual receiving or registered to receive healthcare services"
+        properties:
+          - name: "patient_id"
+            type: "uuid"
+            primary_key: true
+            description: "Unique patient identifier"
+          - name: "medical_record_number"
+            type: "string"
+            unique: true
+            data_classification: "phi"
+            description: "Medical record number assigned by the clinic"
+          - name: "first_name"
+            type: "string"
+            required: true
+            data_classification: "pii"
+          - name: "last_name"
+            type: "string"
+            required: true
+            data_classification: "pii"
+          - name: "date_of_birth"
+            type: "date"
+            required: true
+            data_classification: "pii"
+          - name: "gender"
+            type: "enum"
+            values: ["male", "female", "non_binary", "prefer_not_to_say", "other"]
+            data_classification: "pii"
+          - name: "email"
+            type: "string"
+            format: "email"
+            data_classification: "pii"
+          - name: "phone"
+            type: "string"
+            format: "phone"
+            data_classification: "pii"
+          - name: "address"
+            type: "object"
+            data_classification: "pii"
+            properties:
+              - name: "street"
+                type: "string"
+              - name: "city"
+                type: "string"
+              - name: "state"
+                type: "string"
+              - name: "zip_code"
+                type: "string"
+                format: "zip"
+          - name: "emergency_contact_name"
+            type: "string"
+            data_classification: "pii"
+          - name: "emergency_contact_phone"
+            type: "string"
+            format: "phone"
+            data_classification: "pii"
+          - name: "primary_language"
+            type: "string"
+            default: "en"
+          - name: "requires_interpreter"
+            type: "boolean"
+            default: false
+          - name: "status"
+            type: "enum"
+            values: ["active", "inactive", "deceased", "transferred"]
+            default: "active"
+          - name: "registration_date"
+            type: "datetime"
+            auto_set: "on_create"
+          - name: "last_visit_date"
+            type: "datetime"
+            nullable: true
+          - name: "notes"
+            type: "text"
+            data_classification: "phi"
+            description: "General patient notes visible to care team"
+        relationships:
+          - name: "primary_insurance"
+            target: "insurance_coverage"
+            type: "has_one"
+            description: "Patient's primary insurance coverage"
+          - name: "secondary_insurance"
+            target: "insurance_coverage"
+            type: "has_one"
+            nullable: true
+          - name: "appointments"
+            target: "appointment"
+            type: "has_many"
+            inverse: "patient"
+          - name: "referrals_received"
+            target: "referral"
+            type: "has_many"
+            inverse: "referred_patient"
+          - name: "assigned_clinic"
+            target: "clinic"
+            type: "belongs_to"
+            required: true
+        constraints:
+          - type: "uniqueness"
+            fields: ["medical_record_number"]
+          - type: "uniqueness"
+            fields: ["email"]
+            condition: "email IS NOT NULL"
+
+      - name: "practitioner"
+        description: "A licensed healthcare provider who sees patients"
+        properties:
+          - name: "practitioner_id"
+            type: "uuid"
+            primary_key: true
+          - name: "npi_number"
+            type: "string"
+            unique: true
+            required: true
+            description: "National Provider Identifier — 10-digit unique identifier"
+            validation:
+              pattern: "^[0-9]{10}$"
+          - name: "first_name"
+            type: "string"
+            required: true
+            data_classification: "pii"
+          - name: "last_name"
+            type: "string"
+            required: true
+            data_classification: "pii"
+          - name: "credential_suffix"
+            type: "string"
+            description: "MD, DO, NP, PA, etc."
+          - name: "specialty"
+            type: "enum"
+            values:
+              - "family_medicine"
+              - "internal_medicine"
+              - "pediatrics"
+              - "obstetrics_gynecology"
+              - "cardiology"
+              - "dermatology"
+              - "orthopedics"
+              - "psychiatry"
+              - "neurology"
+              - "general_surgery"
+              - "ophthalmology"
+              - "urgent_care"
+            required: true
+          - name: "email"
+            type: "string"
+            format: "email"
+            required: true
+            data_classification: "pii"
+          - name: "phone"
+            type: "string"
+            format: "phone"
+            data_classification: "pii"
+          - name: "license_number"
+            type: "string"
+            required: true
+          - name: "license_state"
+            type: "string"
+            required: true
+          - name: "license_expiration"
+            type: "date"
+            required: true
+          - name: "accepting_new_patients"
+            type: "boolean"
+            default: true
+          - name: "max_daily_appointments"
+            type: "integer"
+            default: 20
+            validation:
+              min: 1
+              max: 50
+          - name: "default_appointment_duration_minutes"
+            type: "integer"
+            default: 30
+            validation:
+              min: 10
+              max: 120
+          - name: "status"
+            type: "enum"
+            values: ["active", "on_leave", "inactive", "suspended"]
+            default: "active"
+        relationships:
+          - name: "clinics"
+            target: "clinic"
+            type: "many_to_many"
+            through: "practitioner_clinic_assignment"
+            description: "Clinics where this practitioner practices"
+          - name: "appointments"
+            target: "appointment"
+            type: "has_many"
+            inverse: "practitioner"
+          - name: "schedule_blocks"
+            target: "schedule_block"
+            type: "has_many"
+            inverse: "practitioner"
+          - name: "referrals_made"
+            target: "referral"
+            type: "has_many"
+            inverse: "referring_practitioner"
+        constraints:
+          - type: "check"
+            expression: "license_expiration > current_date"
+            description: "Practitioner license must not be expired"
+            enforcement: "warn"
+          - type: "uniqueness"
+            fields: ["npi_number"]
+
+      - name: "appointment"
+        description: "A scheduled encounter between a patient and a practitioner"
+        properties:
+          - name: "appointment_id"
+            type: "uuid"
+            primary_key: true
+          - name: "appointment_type"
+            type: "enum"
+            values:
+              - "new_patient"
+              - "follow_up"
+              - "annual_physical"
+              - "urgent"
+              - "telehealth"
+              - "procedure"
+              - "consultation"
+              - "lab_review"
+            required: true
+          - name: "scheduled_start"
+            type: "datetime"
+            required: true
+            data_classification: "phi"
+          - name: "scheduled_end"
+            type: "datetime"
+            required: true
+            data_classification: "phi"
+          - name: "actual_start"
+            type: "datetime"
+            nullable: true
+          - name: "actual_end"
+            type: "datetime"
+            nullable: true
+          - name: "status"
+            type: "enum"
+            values:
+              - "requested"
+              - "pending_insurance"
+              - "confirmed"
+              - "checked_in"
+              - "in_progress"
+              - "completed"
+              - "cancelled"
+              - "no_show"
+              - "rescheduled"
+            default: "requested"
+          - name: "cancellation_reason"
+            type: "enum"
+            values:
+              - "patient_request"
+              - "practitioner_unavailable"
+              - "insurance_not_verified"
+              - "weather"
+              - "facility_issue"
+              - "other"
+            nullable: true
+          - name: "cancellation_note"
+            type: "text"
+            nullable: true
+          - name: "chief_complaint"
+            type: "text"
+            data_classification: "phi"
+            description: "Reason for visit as stated by patient"
+          - name: "visit_notes"
+            type: "text"
+            data_classification: "phi"
+            nullable: true
+          - name: "is_emergency"
+            type: "boolean"
+            default: false
+          - name: "requires_interpreter"
+            type: "boolean"
+            default: false
+          - name: "interpreter_language"
+            type: "string"
+            nullable: true
+          - name: "copay_amount"
+            type: "decimal"
+            precision: 10
+            scale: 2
+            nullable: true
+          - name: "copay_collected"
+            type: "boolean"
+            default: false
+          - name: "check_in_time"
+            type: "datetime"
+            nullable: true
+          - name: "created_at"
+            type: "datetime"
+            auto_set: "on_create"
+          - name: "updated_at"
+            type: "datetime"
+            auto_set: "on_update"
+          - name: "created_by"
+            type: "uuid"
+            required: true
+            description: "User ID of whoever created the appointment"
+        relationships:
+          - name: "patient"
+            target: "patient"
+            type: "belongs_to"
+            required: true
+          - name: "practitioner"
+            target: "practitioner"
+            type: "belongs_to"
+            required: true
+          - name: "clinic"
+            target: "clinic"
+            type: "belongs_to"
+            required: true
+          - name: "insurance_authorization"
+            target: "insurance_coverage"
+            type: "belongs_to"
+            nullable: true
+            description: "Insurance coverage used for this visit"
+          - name: "originating_referral"
+            target: "referral"
+            type: "belongs_to"
+            nullable: true
+            description: "Referral that led to this appointment, if any"
+        constraints:
+          - type: "check"
+            expression: "scheduled_end > scheduled_start"
+            description: "Appointment end must be after start"
+          - type: "check"
+            expression: "scheduled_start > current_timestamp OR is_emergency = true"
+            description: "Cannot schedule non-emergency appointments in the past"
+          - type: "no_overlap"
+            scope: "practitioner"
+            start_field: "scheduled_start"
+            end_field: "scheduled_end"
+            condition: "status NOT IN ('cancelled', 'rescheduled')"
+            description: "Practitioner cannot be double-booked"
+          - type: "no_overlap"
+            scope: "patient"
+            start_field: "scheduled_start"
+            end_field: "scheduled_end"
+            condition: "status NOT IN ('cancelled', 'rescheduled')"
+            description: "Patient cannot have overlapping appointments"
+
+      - name: "clinic"
+        description: "A physical or virtual location where healthcare services are provided"
+        properties:
+          - name: "clinic_id"
+            type: "uuid"
+            primary_key: true
+          - name: "name"
+            type: "string"
+            required: true
+          - name: "clinic_type"
+            type: "enum"
+            values: ["primary_care", "specialty", "urgent_care", "telehealth", "surgical_center"]
+            required: true
+          - name: "address"
+            type: "object"
+            required: true
+            properties:
+              - name: "street"
+                type: "string"
+              - name: "city"
+                type: "string"
+              - name: "state"
+                type: "string"
+              - name: "zip_code"
+                type: "string"
+                format: "zip"
+          - name: "phone"
+            type: "string"
+            format: "phone"
+            required: true
+          - name: "fax"
+            type: "string"
+            format: "phone"
+            nullable: true
+          - name: "email"
+            type: "string"
+            format: "email"
+          - name: "timezone"
+            type: "string"
+            required: true
+            description: "IANA timezone identifier for the clinic"
+          - name: "operating_hours"
+            type: "object"
+            required: true
+            description: "Weekly operating hours"
+            properties:
+              - name: "monday"
+                type: "time_range"
+                nullable: true
+              - name: "tuesday"
+                type: "time_range"
+                nullable: true
+              - name: "wednesday"
+                type: "time_range"
+                nullable: true
+              - name: "thursday"
+                type: "time_range"
+                nullable: true
+              - name: "friday"
+                type: "time_range"
+                nullable: true
+              - name: "saturday"
+                type: "time_range"
+                nullable: true
+              - name: "sunday"
+                type: "time_range"
+                nullable: true
+          - name: "max_concurrent_appointments"
+            type: "integer"
+            default: 10
+            validation:
+              min: 1
+          - name: "status"
+            type: "enum"
+            values: ["open", "closed_temporarily", "closed_permanently"]
+            default: "open"
+          - name: "accepts_walk_ins"
+            type: "boolean"
+            default: false
+        relationships:
+          - name: "practitioners"
+            target: "practitioner"
+            type: "many_to_many"
+            through: "practitioner_clinic_assignment"
+          - name: "appointments"
+            target: "appointment"
+            type: "has_many"
+            inverse: "clinic"
+          - name: "patients"
+            target: "patient"
+            type: "has_many"
+            inverse: "assigned_clinic"
+
+      - name: "insurance_coverage"
+        description: "A patient's insurance plan details and coverage verification status"
+        properties:
+          - name: "coverage_id"
+            type: "uuid"
+            primary_key: true
+          - name: "insurance_provider"
+            type: "string"
+            required: true
+            description: "Name of the insurance company"
+          - name: "plan_name"
+            type: "string"
+            required: true
+          - name: "plan_type"
+            type: "enum"
+            values: ["hmo", "ppo", "epo", "pos", "hdhp", "medicaid", "medicare", "tricare", "self_pay"]
+            required: true
+          - name: "member_id"
+            type: "string"
+            required: true
+            data_classification: "pii"
+          - name: "group_number"
+            type: "string"
+            nullable: true
+            data_classification: "pii"
+          - name: "subscriber_name"
+            type: "string"
+            required: true
+            data_classification: "pii"
+          - name: "subscriber_relationship"
+            type: "enum"
+            values: ["self", "spouse", "child", "other"]
+            required: true
+          - name: "effective_date"
+            type: "date"
+            required: true
+          - name: "termination_date"
+            type: "date"
+            nullable: true
+          - name: "copay_amount"
+            type: "decimal"
+            precision: 10
+            scale: 2
+            nullable: true
+          - name: "deductible_amount"
+            type: "decimal"
+            precision: 10
+            scale: 2
+            nullable: true
+          - name: "deductible_met"
+            type: "decimal"
+            precision: 10
+            scale: 2
+            default: 0
+          - name: "verification_status"
+            type: "enum"
+            values: ["unverified", "pending", "verified_active", "verified_inactive", "verification_failed"]
+            default: "unverified"
+          - name: "last_verified_at"
+            type: "datetime"
+            nullable: true
+          - name: "verification_notes"
+            type: "text"
+            nullable: true
+          - name: "requires_preauthorization"
+            type: "boolean"
+            default: false
+          - name: "preauthorization_phone"
+            type: "string"
+            format: "phone"
+            nullable: true
+          - name: "priority"
+            type: "enum"
+            values: ["primary", "secondary", "tertiary"]
+            required: true
+        relationships:
+          - name: "patient"
+            target: "patient"
+            type: "belongs_to"
+            required: true
+        constraints:
+          - type: "check"
+            expression: "termination_date IS NULL OR termination_date >= effective_date"
+            description: "Termination date must be on or after effective date"
+          - type: "uniqueness"
+            fields: ["patient", "insurance_provider", "member_id", "priority"]
+
+      - name: "referral"
+        description: "A formal request for a patient to see another practitioner or specialist"
+        properties:
+          - name: "referral_id"
+            type: "uuid"
+            primary_key: true
+          - name: "referral_number"
+            type: "string"
+            unique: true
+            auto_generate: true
+            description: "Human-readable referral tracking number"
+          - name: "referral_type"
+            type: "enum"
+            values: ["internal", "external_inbound", "external_outbound"]
+            required: true
+          - name: "urgency"
+            type: "enum"
+            values: ["routine", "urgent", "emergent"]
+            default: "routine"
+          - name: "target_specialty"
+            type: "enum"
+            values:
+              - "family_medicine"
+              - "internal_medicine"
+              - "pediatrics"
+              - "obstetrics_gynecology"
+              - "cardiology"
+              - "dermatology"
+              - "orthopedics"
+              - "psychiatry"
+              - "neurology"
+              - "general_surgery"
+              - "ophthalmology"
+              - "urgent_care"
+            required: true
+          - name: "reason"
+            type: "text"
+            required: true
+            data_classification: "phi"
+          - name: "clinical_notes"
+            type: "text"
+            data_classification: "phi"
+            nullable: true
+          - name: "diagnosis_codes"
+            type: "array"
+            items:
+              type: "string"
+            description: "ICD-10 diagnosis codes supporting the referral"
+            data_classification: "phi"
+          - name: "status"
+            type: "enum"
+            values:
+              - "draft"
+              - "submitted"
+              - "under_review"
+              - "approved"
+              - "denied"
+              - "expired"
+              - "completed"
+              - "cancelled"
+            default: "draft"
+          - name: "denial_reason"
+            type: "text"
+            nullable: true
+          - name: "authorized_visits"
+            type: "integer"
+            default: 1
+            validation:
+              min: 1
+              max: 52
+          - name: "visits_used"
+            type: "integer"
+            default: 0
+          - name: "valid_from"
+            type: "date"
+            required: true
+          - name: "valid_until"
+            type: "date"
+            required: true
+          - name: "requires_insurance_auth"
+            type: "boolean"
+            default: false
+          - name: "insurance_auth_number"
+            type: "string"
+            nullable: true
+          - name: "created_at"
+            type: "datetime"
+            auto_set: "on_create"
+          - name: "reviewed_at"
+            type: "datetime"
+            nullable: true
+          - name: "reviewed_by"
+            type: "uuid"
+            nullable: true
+        relationships:
+          - name: "referred_patient"
+            target: "patient"
+            type: "belongs_to"
+            required: true
+          - name: "referring_practitioner"
+            target: "practitioner"
+            type: "belongs_to"
+            required: true
+          - name: "target_practitioner"
+            target: "practitioner"
+            type: "belongs_to"
+            nullable: true
+            description: "Specific practitioner if known; null if any in specialty"
+          - name: "originating_appointment"
+            target: "appointment"
+            type: "belongs_to"
+            nullable: true
+            description: "Appointment during which referral was created"
+          - name: "resulting_appointments"
+            target: "appointment"
+            type: "has_many"
+            inverse: "originating_referral"
+        constraints:
+          - type: "check"
+            expression: "valid_until >= valid_from"
+            description: "Referral validity end must be on or after start"
+          - type: "check"
+            expression: "visits_used <= authorized_visits"
+            description: "Cannot exceed authorized visit count"
+
+      - name: "schedule_block"
+        description: "A block of time defining practitioner availability or unavailability"
+        properties:
+          - name: "block_id"
+            type: "uuid"
+            primary_key: true
+          - name: "block_type"
+            type: "enum"
+            values: ["available", "unavailable", "lunch", "administrative", "on_call"]
+            required: true
+          - name: "start_time"
+            type: "datetime"
+            required: true
+          - name: "end_time"
+            type: "datetime"
+            required: true
+          - name: "recurrence_rule"
+            type: "string"
+            nullable: true
+            description: "Recurrence pattern (e.g., RRULE format) for repeating blocks"
+          - name: "recurrence_end"
+            type: "date"
+            nullable: true
+          - name: "reason"
+            type: "string"
+            nullable: true
+          - name: "appointment_types_allowed"
+            type: "array"
+            items:
+              type: "string"
+            nullable: true
+            description: "If set, only these appointment types can be booked in this block"
+        relationships:
+          - name: "practitioner"
+            target: "practitioner"
+            type: "belongs_to"
+            required: true
+          - name: "clinic"
+            target: "clinic"
+            type: "belongs_to"
+            required: true
+        constraints:
+          - type: "check"
+            expression: "end_time > start_time"
+            description: "Block end must be after start"
+
+      - name: "practitioner_clinic_assignment"
+        description: "Junction entity linking practitioners to clinics with assignment details"
+        properties:
+          - name: "assignment_id"
+            type: "uuid"
+            primary_key: true
+          - name: "is_primary_location"
+            type: "boolean"
+            default: false
+          - name: "start_date"
+            type: "date"
+            required: true
+          - name: "end_date"
+            type: "date"
+            nullable: true
+          - name: "assigned_room"
+            type: "string"
+            nullable: true
+        relationships:
+          - name: "practitioner"
+            target: "practitioner"
+            type: "belongs_to"
+            required: true
+          - name: "clinic"
+            target: "clinic"
+            type: "belongs_to"
+            required: true
+        constraints:
+          - type: "uniqueness"
+            fields: ["practitioner", "clinic", "start_date"]
+
+  # ===========================================================================
+  # 2. SEMANTIC — Measures, dimensions, and analytical definitions
+  # ===========================================================================
+  semantic:
+    measures:
+      - name: "utilization_rate"
+        description: "Percentage of available appointment slots that are booked"
+        expression: "count(appointments WHERE status NOT IN ('cancelled', 'rescheduled')) / count(available_slots)"
+        type: "ratio"
+        format: "percentage"
+        unit: "percent"
+        grain: "daily"
+        entities: ["appointment", "schedule_block"]
+
+      - name: "no_show_rate"
+        description: "Percentage of confirmed appointments where patient did not show"
+        expression: "count(appointments WHERE status = 'no_show') / count(appointments WHERE status IN ('completed', 'no_show'))"
+        type: "ratio"
+        format: "percentage"
+        unit: "percent"
+        grain: "daily"
+        entities: ["appointment"]
+
+      - name: "avg_wait_time_minutes"
+        description: "Average time between patient check-in and appointment actual start"
+        expression: "avg(actual_start - check_in_time)"
+        type: "average"
+        format: "duration"
+        unit: "minutes"
+        grain: "daily"
+        entities: ["appointment"]
+        filters:
+          - "check_in_time IS NOT NULL"
+          - "actual_start IS NOT NULL"
+
+      - name: "avg_visit_duration_minutes"
+        description: "Average duration of completed appointments"
+        expression: "avg(actual_end - actual_start)"
+        type: "average"
+        format: "duration"
+        unit: "minutes"
+        grain: "daily"
+        entities: ["appointment"]
+        filters:
+          - "status = 'completed'"
+          - "actual_start IS NOT NULL"
+          - "actual_end IS NOT NULL"
+
+      - name: "revenue_per_practitioner"
+        description: "Total copay revenue collected per practitioner"
+        expression: "sum(copay_amount WHERE copay_collected = true)"
+        type: "sum"
+        format: "currency"
+        unit: "usd"
+        grain: "monthly"
+        entities: ["appointment", "practitioner"]
+
+      - name: "cancellation_rate"
+        description: "Percentage of booked appointments that were cancelled"
+        expression: "count(appointments WHERE status = 'cancelled') / count(appointments WHERE status != 'requested')"
+        type: "ratio"
+        format: "percentage"
+        unit: "percent"
+        grain: "daily"
+        entities: ["appointment"]
+
+      - name: "new_patient_volume"
+        description: "Count of new patient appointments"
+        expression: "count(appointments WHERE appointment_type = 'new_patient' AND status IN ('completed', 'checked_in', 'in_progress'))"
+        type: "count"
+        format: "integer"
+        grain: "weekly"
+        entities: ["appointment"]
+
+      - name: "referral_completion_rate"
+        description: "Percentage of approved referrals that resulted in a completed appointment"
+        expression: "count(referrals WHERE status = 'completed') / count(referrals WHERE status IN ('approved', 'completed'))"
+        type: "ratio"
+        format: "percentage"
+        unit: "percent"
+        grain: "monthly"
+        entities: ["referral"]
+
+      - name: "insurance_verification_turnaround_hours"
+        description: "Average time from insurance verification request to completion"
+        expression: "avg(last_verified_at - created_at WHERE verification_status IN ('verified_active', 'verified_inactive'))"
+        type: "average"
+        format: "duration"
+        unit: "hours"
+        grain: "daily"
+        entities: ["insurance_coverage"]
+
+      - name: "daily_appointment_count"
+        description: "Total number of scheduled appointments per day"
+        expression: "count(appointments WHERE status NOT IN ('cancelled', 'rescheduled'))"
+        type: "count"
+        format: "integer"
+        grain: "daily"
+        entities: ["appointment"]
+
+    dimensions:
+      - name: "practitioner_specialty"
+        description: "The medical specialty of the practitioner"
+        entity: "practitioner"
+        field: "specialty"
+        type: "categorical"
+
+      - name: "clinic_location"
+        description: "The clinic where the appointment takes place"
+        entity: "clinic"
+        field: "name"
+        type: "categorical"
+
+      - name: "clinic_type"
+        description: "The type of clinic facility"
+        entity: "clinic"
+        field: "clinic_type"
+        type: "categorical"
+
+      - name: "appointment_type"
+        description: "The type/category of appointment"
+        entity: "appointment"
+        field: "appointment_type"
+        type: "categorical"
+
+      - name: "appointment_status"
+        description: "Current status of the appointment"
+        entity: "appointment"
+        field: "status"
+        type: "categorical"
+
+      - name: "insurance_type"
+        description: "The patient's insurance plan type"
+        entity: "insurance_coverage"
+        field: "plan_type"
+        type: "categorical"
+
+      - name: "insurance_provider"
+        description: "The patient's insurance company"
+        entity: "insurance_coverage"
+        field: "insurance_provider"
+        type: "categorical"
+
+      - name: "referral_urgency"
+        description: "Urgency level of the referral"
+        entity: "referral"
+        field: "urgency"
+        type: "categorical"
+
+      - name: "time_period"
+        description: "Calendar-based time dimension for appointment scheduling"
+        entity: "appointment"
+        field: "scheduled_start"
+        type: "temporal"
+        granularities: ["hour", "day", "week", "month", "quarter", "year"]
+
+      - name: "day_of_week"
+        description: "Day of the week for pattern analysis"
+        entity: "appointment"
+        field: "scheduled_start"
+        type: "temporal"
+        granularities: ["day_of_week"]
+
+      - name: "patient_status"
+        description: "Active/inactive status of the patient"
+        entity: "patient"
+        field: "status"
+        type: "categorical"
+
+      - name: "cancellation_reason"
+        description: "Reason for appointment cancellation"
+        entity: "appointment"
+        field: "cancellation_reason"
+        type: "categorical"
+
+  # ===========================================================================
+  # 3. AUTHORIZATION — Roles, rules, and relationship-based access
+  # ===========================================================================
+  authorization:
+    roles:
+      - name: "practitioner"
+        description: "Licensed healthcare provider with patient care responsibilities"
+        inherits: []
+
+      - name: "admin"
+        description: "Clinic administrator with full operational access"
+        inherits: []
+
+      - name: "patient"
+        description: "Individual receiving healthcare services"
+        inherits: []
+
+      - name: "receptionist"
+        description: "Front desk staff handling scheduling and check-in"
+        inherits: []
+
+      - name: "billing_specialist"
+        description: "Staff handling insurance verification and billing"
+        inherits: []
+
+      - name: "nurse"
+        description: "Clinical support staff assisting practitioners"
+        inherits: []
+
+      - name: "referral_coordinator"
+        description: "Staff managing referral intake and processing"
+        inherits: ["receptionist"]
+
+    relationships:
+      - name: "treats"
+        subject: "practitioner"
+        object: "patient"
+        condition: >
+          There exists an active appointment (status IN ('confirmed', 'checked_in',
+          'in_progress')) linking this practitioner to this patient, OR there
+          exists a completed appointment within the last 24 months.
+        description: "Practitioner has an active or recent care relationship with patient"
+
+      - name: "assigned_to_clinic"
+        subject: "practitioner"
+        object: "clinic"
+        condition: >
+          Practitioner has an active practitioner_clinic_assignment to this clinic
+          where start_date <= current_date AND (end_date IS NULL OR end_date >= current_date).
+        description: "Practitioner is currently assigned to practice at this clinic"
+
+      - name: "registered_at"
+        subject: "patient"
+        object: "clinic"
+        condition: "Patient's assigned_clinic matches this clinic."
+        description: "Patient is registered at this clinic"
+
+      - name: "works_at"
+        subject: "receptionist"
+        object: "clinic"
+        condition: "Staff member is assigned to this clinic location."
+        description: "Receptionist works at this clinic"
+
+      - name: "referred_by"
+        subject: "patient"
+        object: "practitioner"
+        condition: >
+          An approved, non-expired referral exists where this practitioner is the
+          referring_practitioner for this patient.
+        description: "Patient was referred by this practitioner"
+
+    rules:
+      # --- Patient entity access ---
+      - name: "patient_reads_own_record"
+        description: "Patients can view their own demographic and appointment information"
+        effect: "allow"
+        role: "patient"
+        action: "read"
+        target: "patient"
+        condition: "subject.patient_id = resource.patient_id"
+        fields_excluded: ["notes"]
+
+      - name: "patient_updates_own_demographics"
+        description: "Patients can update their own contact information"
+        effect: "allow"
+        role: "patient"
+        action: "update"
+        target: "patient"
+        condition: "subject.patient_id = resource.patient_id"
+        fields_allowed: ["phone", "email", "address", "emergency_contact_name", "emergency_contact_phone", "primary_language", "requires_interpreter"]
+
+      - name: "practitioner_reads_treated_patients"
+        description: "Practitioners can view records of patients they treat"
+        effect: "allow"
+        role: "practitioner"
+        action: "read"
+        target: "patient"
+        condition: "relationship:treats(subject, resource)"
+
+      - name: "practitioner_updates_clinical_notes"
+        description: "Practitioners can update clinical notes for patients they treat"
+        effect: "allow"
+        role: "practitioner"
+        action: "update"
+        target: "patient"
+        condition: "relationship:treats(subject, resource)"
+        fields_allowed: ["notes", "last_visit_date"]
+
+      - name: "receptionist_reads_clinic_patients"
+        description: "Receptionists can view patients registered at their clinic"
+        effect: "allow"
+        role: "receptionist"
+        action: "read"
+        target: "patient"
+        condition: "relationship:works_at(subject, resource.assigned_clinic)"
+        fields_excluded: ["notes"]
+
+      - name: "receptionist_creates_patients"
+        description: "Receptionists can register new patients at their clinic"
+        effect: "allow"
+        role: "receptionist"
+        action: "create"
+        target: "patient"
+        condition: "relationship:works_at(subject, resource.assigned_clinic)"
+
+      - name: "admin_full_patient_access"
+        description: "Administrators can read all patient records"
+        effect: "allow"
+        role: "admin"
+        action: ["read", "update", "create", "delete"]
+        target: "patient"
+        condition: "always"
+
+      # --- Appointment entity access ---
+      - name: "patient_reads_own_appointments"
+        description: "Patients can view their own appointments"
+        effect: "allow"
+        role: "patient"
+        action: "read"
+        target: "appointment"
+        condition: "subject.patient_id = resource.patient.patient_id"
+        fields_excluded: ["visit_notes"]
+
+      - name: "practitioner_reads_own_appointments"
+        description: "Practitioners can view their own appointments"
+        effect: "allow"
+        role: "practitioner"
+        action: "read"
+        target: "appointment"
+        condition: "subject.practitioner_id = resource.practitioner.practitioner_id"
+
+      - name: "practitioner_updates_own_appointments"
+        description: "Practitioners can update clinical data on their own appointments"
+        effect: "allow"
+        role: "practitioner"
+        action: "update"
+        target: "appointment"
+        condition: "subject.practitioner_id = resource.practitioner.practitioner_id"
+        fields_allowed: ["visit_notes", "status", "actual_start", "actual_end"]
+
+      - name: "receptionist_manages_clinic_appointments"
+        description: "Receptionists can create, read, and update appointments at their clinic"
+        effect: "allow"
+        role: "receptionist"
+        action: ["create", "read", "update"]
+        target: "appointment"
+        condition: "relationship:works_at(subject, resource.clinic)"
+        fields_excluded: ["visit_notes"]
+
+      - name: "admin_full_appointment_access"
+        description: "Administrators have full access to all appointments"
+        effect: "allow"
+        role: "admin"
+        action: ["read", "update", "create", "delete"]
+        target: "appointment"
+        condition: "always"
+
+      # --- Insurance coverage access ---
+      - name: "patient_reads_own_insurance"
+        description: "Patients can view their own insurance information"
+        effect: "allow"
+        role: "patient"
+        action: "read"
+        target: "insurance_coverage"
+        condition: "subject.patient_id = resource.patient.patient_id"
+
+      - name: "billing_manages_insurance"
+        description: "Billing specialists can manage all insurance coverage records"
+        effect: "allow"
+        role: "billing_specialist"
+        action: ["read", "update", "create"]
+        target: "insurance_coverage"
+        condition: "always"
+
+      - name: "receptionist_reads_insurance"
+        description: "Receptionists can view insurance for patients at their clinic"
+        effect: "allow"
+        role: "receptionist"
+        action: "read"
+        target: "insurance_coverage"
+        condition: "relationship:works_at(subject, resource.patient.assigned_clinic)"
+
+      # --- Referral access ---
+      - name: "practitioner_manages_own_referrals"
+        description: "Practitioners can create and view referrals they initiated"
+        effect: "allow"
+        role: "practitioner"
+        action: ["create", "read", "update"]
+        target: "referral"
+        condition: "subject.practitioner_id = resource.referring_practitioner.practitioner_id"
+
+      - name: "practitioner_reads_incoming_referrals"
+        description: "Practitioners can view referrals targeting them"
+        effect: "allow"
+        role: "practitioner"
+        action: "read"
+        target: "referral"
+        condition: "subject.practitioner_id = resource.target_practitioner.practitioner_id"
+
+      - name: "referral_coordinator_manages_referrals"
+        description: "Referral coordinators can process and manage all referrals"
+        effect: "allow"
+        role: "referral_coordinator"
+        action: ["read", "update"]
+        target: "referral"
+        condition: "always"
+
+      - name: "patient_reads_own_referrals"
+        description: "Patients can view their own referrals"
+        effect: "allow"
+        role: "patient"
+        action: "read"
+        target: "referral"
+        condition: "subject.patient_id = resource.referred_patient.patient_id"
+        fields_excluded: ["clinical_notes", "diagnosis_codes"]
+
+      # --- Schedule block access ---
+      - name: "practitioner_manages_own_schedule"
+        description: "Practitioners can manage their own schedule blocks"
+        effect: "allow"
+        role: "practitioner"
+        action: ["read", "create", "update", "delete"]
+        target: "schedule_block"
+        condition: "subject.practitioner_id = resource.practitioner.practitioner_id"
+
+      - name: "receptionist_reads_clinic_schedules"
+        description: "Receptionists can view schedules for their clinic"
+        effect: "allow"
+        role: "receptionist"
+        action: "read"
+        target: "schedule_block"
+        condition: "relationship:works_at(subject, resource.clinic)"
+
+      # --- Semantic / analytics access ---
+      - name: "practitioner_reads_own_metrics"
+        description: "Practitioners can view aggregate metrics for their own patients and appointments"
+        effect: "allow"
+        role: "practitioner"
+        action: "read"
+        target: "semantic_layer"
+        condition: "dimension:practitioner is filtered to subject.practitioner_id"
+
+      - name: "admin_reads_all_metrics"
+        description: "Administrators can view all analytics and metrics"
+        effect: "allow"
+        role: "admin"
+        action: "read"
+        target: "semantic_layer"
+        condition: "always"
+
+  # ===========================================================================
+  # 4. POLICY — Compliance frameworks, data handling, and business constraints
+  # ===========================================================================
+  policy:
+    compliance:
+      - name: "hipaa_phi_audit_logging"
+        framework: "HIPAA"
+        regulation_reference: "45 CFR 164.312(b)"
+        description: >
+          All access to fields classified as PHI must generate an immutable
+          audit log entry containing the accessor identity, timestamp, action
+          performed, and the specific fields accessed.
+        applies_to:
+          data_classification: "phi"
+        requirements:
+          - "Every read, create, update, or delete of PHI fields must be logged"
+          - "Audit logs must be immutable and retained for a minimum of 6 years"
+          - "Audit logs must include: user_id, timestamp, action, entity, entity_id, fields_accessed"
+          - "Audit log storage must be separate from operational data"
+
+      - name: "hipaa_minimum_necessary"
+        framework: "HIPAA"
+        regulation_reference: "45 CFR 164.502(b)"
+        description: >
+          Access to PHI must be limited to the minimum necessary information
+          to accomplish the intended purpose. Authorization rules must enforce
+          field-level access restrictions based on role and relationship.
+        applies_to:
+          data_classification: "phi"
+        requirements:
+          - "API responses must exclude PHI fields the requesting role is not authorized to view"
+          - "Queries must be scoped to only the records the user has a legitimate relationship with"
+          - "Bulk export of PHI requires admin approval and generates an alert"
+
+      - name: "hipaa_pii_encryption"
+        framework: "HIPAA"
+        regulation_reference: "45 CFR 164.312(a)(2)(iv)"
+        description: >
+          All PII and PHI must be encrypted at rest and in transit.
+        applies_to:
+          data_classification: ["phi", "pii"]
+        requirements:
+          - "Data at rest must use AES-256 or equivalent encryption"
+          - "Data in transit must use TLS 1.2 or higher"
+          - "Encryption keys must be managed through a dedicated key management service"
+
+      - name: "hipaa_breach_notification"
+        framework: "HIPAA"
+        regulation_reference: "45 CFR 164.404"
+        description: >
+          Unauthorized access to PHI must trigger a breach notification workflow.
+        applies_to:
+          data_classification: "phi"
+        requirements:
+          - "Failed access attempts to PHI must be logged and monitored"
+          - "Anomalous access patterns must trigger security alerts"
+          - "Breach detection must notify compliance officer within 1 hour"
+
+      - name: "patient_consent_tracking"
+        framework: "HIPAA"
+        regulation_reference: "45 CFR 164.508"
+        description: >
+          Disclosure of PHI for purposes beyond treatment, payment, and
+          healthcare operations requires documented patient consent.
+        applies_to:
+          data_classification: "phi"
+        requirements:
+          - "Patient consent records must be maintained for all non-TPO disclosures"
+          - "Consent must specify the information disclosed, recipient, and purpose"
+          - "Patients can revoke consent at any time; revocation must be honored immediately"
+
+    constraints:
+      - name: "no_past_scheduling"
+        description: "Non-emergency appointments cannot be scheduled in the past"
+        type: "temporal"
+        applies_to: "appointment"
+        rule: "scheduled_start > current_timestamp OR is_emergency = true"
+        enforcement: "reject"
+        error_message: "Cannot schedule a non-emergency appointment in the past"
+
+      - name: "no_practitioner_double_booking"
+        description: "A practitioner cannot have overlapping appointment times"
+        type: "overlap"
+        applies_to: "appointment"
+        scope: "practitioner"
+        rule: >
+          No two appointments for the same practitioner may have overlapping
+          [scheduled_start, scheduled_end) intervals unless one has status
+          'cancelled' or 'rescheduled'.
+        enforcement: "reject"
+        error_message: "Practitioner is already booked during this time slot"
+
+      - name: "no_patient_double_booking"
+        description: "A patient cannot have overlapping appointments"
+        type: "overlap"
+        applies_to: "appointment"
+        scope: "patient"
+        rule: >
+          No two appointments for the same patient may have overlapping
+          [scheduled_start, scheduled_end) intervals unless one has status
+          'cancelled' or 'rescheduled'.
+        enforcement: "reject"
+        error_message: "Patient already has an appointment during this time"
+
+      - name: "insurance_verification_before_non_emergency"
+        description: "Insurance must be verified before confirming a non-emergency appointment"
+        type: "precondition"
+        applies_to: "appointment"
+        rule: >
+          When transitioning appointment status to 'confirmed', the patient's
+          primary insurance_coverage.verification_status must be 'verified_active',
+          OR the appointment.is_emergency must be true, OR the insurance plan_type
+          must be 'self_pay'.
+        enforcement: "reject"
+        error_message: "Insurance must be verified before confirming this appointment"
+
+      - name: "practitioner_license_active"
+        description: "Appointments can only be booked with practitioners whose license is current"
+        type: "precondition"
+        applies_to: "appointment"
+        rule: >
+          The appointment's practitioner must have status 'active' and
+          license_expiration > current_date.
+        enforcement: "reject"
+        error_message: "Cannot book appointment with a practitioner whose license is expired or inactive"
+
+      - name: "appointment_within_operating_hours"
+        description: "Appointments must fall within the clinic's operating hours"
+        type: "temporal"
+        applies_to: "appointment"
+        rule: >
+          The appointment's [scheduled_start, scheduled_end) must fall entirely
+          within the clinic's operating_hours for the day of the week, unless
+          is_emergency = true.
+        enforcement: "reject"
+        error_message: "Appointment time is outside clinic operating hours"
+
+      - name: "max_daily_appointments_per_practitioner"
+        description: "A practitioner cannot exceed their daily appointment limit"
+        type: "cardinality"
+        applies_to: "appointment"
+        scope: "practitioner"
+        rule: >
+          The count of non-cancelled appointments for a practitioner on a given
+          calendar day must not exceed practitioner.max_daily_appointments.
+        enforcement: "reject"
+        error_message: "Practitioner has reached the maximum number of appointments for this day"
+
+      - name: "referral_required_for_specialist"
+        description: "HMO patients require a referral for specialist appointments"
+        type: "precondition"
+        applies_to: "appointment"
+        rule: >
+          When the patient's primary insurance plan_type = 'hmo' and the
+          practitioner's specialty is not 'family_medicine', 'internal_medicine',
+          or 'urgent_care', the appointment must have an originating_referral
+          with status 'approved' and valid_until >= appointment.scheduled_start
+          and visits_used < authorized_visits.
+        enforcement: "reject"
+        error_message: "An approved referral is required for specialist visits under HMO plans"
+
+      - name: "cancellation_notice_policy"
+        description: "Non-emergency cancellations require 24 hours notice"
+        type: "temporal"
+        applies_to: "appointment"
+        rule: >
+          When cancelling an appointment, the cancellation must occur at least
+          24 hours before scheduled_start, OR the appointment must be marked
+          as is_emergency, OR a cancellation_reason of 'practitioner_unavailable'
+          or 'weather' or 'facility_issue' is provided.
+        enforcement: "warn"
+        warning_message: "Late cancellation — patient may be charged a cancellation fee"
+
+  # ===========================================================================
+  # 5. ACTIONS — Operations that can be performed in the domain
+  # ===========================================================================
+  actions:
+    - name: "book_appointment"
+      description: "Schedule a new appointment for a patient with a practitioner"
+      target_entity: "appointment"
+      operation: "create"
+      required_permissions:
+        roles: ["receptionist", "admin", "patient"]
+        conditions:
+          - role: "patient"
+            constraint: "Can only book for self"
+          - role: "receptionist"
+            constraint: "Can only book at own clinic"
+      parameters:
+        - name: "patient_id"
+          type: "uuid"
+          required: true
+        - name: "practitioner_id"
+          type: "uuid"
+          required: true
+        - name: "clinic_id"
+          type: "uuid"
+          required: true
+        - name: "appointment_type"
+          type: "enum"
+          required: true
+        - name: "scheduled_start"
+          type: "datetime"
+          required: true
+        - name: "scheduled_end"
+          type: "datetime"
+          required: true
+        - name: "chief_complaint"
+          type: "text"
+          required: true
+        - name: "is_emergency"
+          type: "boolean"
+          default: false
+        - name: "referral_id"
+          type: "uuid"
+          required: false
+      preconditions:
+        - "practitioner is active and assigned to the specified clinic"
+        - "no overlapping appointment exists for practitioner or patient"
+        - "scheduled time is within clinic operating hours (unless emergency)"
+        - "practitioner has not exceeded max_daily_appointments"
+        - "if HMO and specialist, valid referral must exist"
+      side_effects:
+        - event: "appointment_booked"
+        - action: "If patient has unverified insurance, trigger verify_insurance"
+        - action: "Schedule send_reminder for 24 hours before appointment"
+
+    - name: "cancel_appointment"
+      description: "Cancel an existing appointment"
+      target_entity: "appointment"
+      operation: "update"
+      required_permissions:
+        roles: ["receptionist", "admin", "patient", "practitioner"]
+        conditions:
+          - role: "patient"
+            constraint: "Can only cancel own appointments"
+          - role: "practitioner"
+            constraint: "Can only cancel own appointments"
+      parameters:
+        - name: "appointment_id"
+          type: "uuid"
+          required: true
+        - name: "cancellation_reason"
+          type: "enum"
+          required: true
+        - name: "cancellation_note"
+          type: "text"
+          required: false
+      preconditions:
+        - "appointment status must be in ('requested', 'pending_insurance', 'confirmed')"
+        - "appointment must not have already started (status != 'in_progress')"
+      state_transition:
+        from: ["requested", "pending_insurance", "confirmed"]
+        to: "cancelled"
+      side_effects:
+        - event: "appointment_cancelled"
+        - action: "Cancel any pending reminders for this appointment"
+        - action: "If late cancellation, flag for cancellation fee review"
+
+    - name: "reschedule_appointment"
+      description: "Move an existing appointment to a new date/time"
+      target_entity: "appointment"
+      operation: "update"
+      required_permissions:
+        roles: ["receptionist", "admin", "patient"]
+        conditions:
+          - role: "patient"
+            constraint: "Can only reschedule own appointments"
+      parameters:
+        - name: "appointment_id"
+          type: "uuid"
+          required: true
+        - name: "new_scheduled_start"
+          type: "datetime"
+          required: true
+        - name: "new_scheduled_end"
+          type: "datetime"
+          required: true
+        - name: "new_practitioner_id"
+          type: "uuid"
+          required: false
+          description: "Optionally change practitioner"
+        - name: "reason"
+          type: "text"
+          required: false
+      preconditions:
+        - "original appointment status must be in ('requested', 'pending_insurance', 'confirmed')"
+        - "new time slot must pass all scheduling constraints (no overlap, within hours, etc.)"
+      side_effects:
+        - action: "Mark original appointment as 'rescheduled'"
+        - action: "Create a new appointment with the updated times"
+        - event: "appointment_rescheduled"
+
+    - name: "check_in_patient"
+      description: "Record patient arrival for a scheduled appointment"
+      target_entity: "appointment"
+      operation: "update"
+      required_permissions:
+        roles: ["receptionist", "admin", "nurse"]
+      parameters:
+        - name: "appointment_id"
+          type: "uuid"
+          required: true
+        - name: "copay_collected"
+          type: "boolean"
+          default: false
+        - name: "copay_amount"
+          type: "decimal"
+          required: false
+      preconditions:
+        - "appointment status must be 'confirmed'"
+        - "current time must be within 30 minutes of scheduled_start (before or after)"
+        - "insurance must be verified (unless emergency or self-pay)"
+      state_transition:
+        from: ["confirmed"]
+        to: "checked_in"
+      side_effects:
+        - action: "Set check_in_time to current timestamp"
+        - event: "patient_checked_in"
+        - action: "Notify practitioner that patient has arrived"
+
+    - name: "start_appointment"
+      description: "Mark that the practitioner has started seeing the patient"
+      target_entity: "appointment"
+      operation: "update"
+      required_permissions:
+        roles: ["practitioner", "nurse", "admin"]
+      parameters:
+        - name: "appointment_id"
+          type: "uuid"
+          required: true
+      preconditions:
+        - "appointment status must be 'checked_in'"
+      state_transition:
+        from: ["checked_in"]
+        to: "in_progress"
+      side_effects:
+        - action: "Set actual_start to current timestamp"
+        - event: "appointment_started"
+
+    - name: "complete_appointment"
+      description: "Mark an appointment as finished and add visit notes"
+      target_entity: "appointment"
+      operation: "update"
+      required_permissions:
+        roles: ["practitioner", "admin"]
+        conditions:
+          - role: "practitioner"
+            constraint: "Can only complete own appointments"
+      parameters:
+        - name: "appointment_id"
+          type: "uuid"
+          required: true
+        - name: "visit_notes"
+          type: "text"
+          required: true
+          data_classification: "phi"
+      preconditions:
+        - "appointment status must be 'in_progress'"
+      state_transition:
+        from: ["in_progress"]
+        to: "completed"
+      side_effects:
+        - action: "Set actual_end to current timestamp"
+        - action: "Update patient.last_visit_date"
+        - event: "appointment_completed"
+        - action: "If originating_referral exists, increment referral.visits_used"
+
+    - name: "mark_no_show"
+      description: "Mark a patient as a no-show for a confirmed appointment"
+      target_entity: "appointment"
+      operation: "update"
+      required_permissions:
+        roles: ["receptionist", "admin"]
+      parameters:
+        - name: "appointment_id"
+          type: "uuid"
+          required: true
+      preconditions:
+        - "appointment status must be 'confirmed'"
+        - "current time must be at least 15 minutes past scheduled_start"
+      state_transition:
+        from: ["confirmed"]
+        to: "no_show"
+      side_effects:
+        - event: "patient_no_show"
+        - action: "Flag patient record for no-show tracking"
+
+    - name: "verify_insurance"
+      description: "Verify a patient's insurance coverage status with the provider"
+      target_entity: "insurance_coverage"
+      operation: "update"
+      required_permissions:
+        roles: ["billing_specialist", "receptionist", "admin"]
+      parameters:
+        - name: "coverage_id"
+          type: "uuid"
+          required: true
+        - name: "verification_result"
+          type: "enum"
+          values: ["verified_active", "verified_inactive", "verification_failed"]
+          required: true
+        - name: "copay_amount"
+          type: "decimal"
+          required: false
+        - name: "deductible_amount"
+          type: "decimal"
+          required: false
+        - name: "deductible_met"
+          type: "decimal"
+          required: false
+        - name: "verification_notes"
+          type: "text"
+          required: false
+      preconditions:
+        - "coverage record must exist"
+      side_effects:
+        - action: "Set verification_status to verification_result"
+        - action: "Set last_verified_at to current timestamp"
+        - event: "insurance_verified"
+        - action: >
+            If verification_result = 'verified_active' and there are pending_insurance
+            appointments for this patient, transition them to 'confirmed'
+
+    - name: "submit_referral"
+      description: "Submit a new referral for review and approval"
+      target_entity: "referral"
+      operation: "update"
+      required_permissions:
+        roles: ["practitioner", "admin"]
+        conditions:
+          - role: "practitioner"
+            constraint: "Can only submit referrals they created"
+      parameters:
+        - name: "referral_id"
+          type: "uuid"
+          required: true
+      preconditions:
+        - "referral status must be 'draft'"
+        - "all required fields must be populated (reason, target_specialty, referred_patient)"
+      state_transition:
+        from: ["draft"]
+        to: "submitted"
+      side_effects:
+        - event: "referral_submitted"
+        - action: "Notify referral coordinators of new referral for review"
+        - action: "If requires_insurance_auth = true, initiate insurance authorization"
+
+    - name: "review_referral"
+      description: "Approve or deny a submitted referral"
+      target_entity: "referral"
+      operation: "update"
+      required_permissions:
+        roles: ["referral_coordinator", "admin"]
+      parameters:
+        - name: "referral_id"
+          type: "uuid"
+          required: true
+        - name: "decision"
+          type: "enum"
+          values: ["approved", "denied"]
+          required: true
+        - name: "denial_reason"
+          type: "text"
+          required_if: "decision = 'denied'"
+        - name: "authorized_visits"
+          type: "integer"
+          required: false
+        - name: "valid_from"
+          type: "date"
+          required: false
+        - name: "valid_until"
+          type: "date"
+          required: false
+      preconditions:
+        - "referral status must be 'submitted' or 'under_review'"
+        - "reviewer must not be the referring_practitioner (separation of duties)"
+      state_transition:
+        from: ["submitted", "under_review"]
+        to: "{{decision}}"
+      side_effects:
+        - action: "Set reviewed_at to current timestamp"
+        - action: "Set reviewed_by to current user"
+        - event: "referral_reviewed"
+        - action: "Notify referring_practitioner and patient of decision"
+
+    - name: "send_reminder"
+      description: "Send an appointment reminder notification to the patient"
+      target_entity: "appointment"
+      operation: "read"
+      required_permissions:
+        roles: ["receptionist", "admin"]
+        system: true
+        description: "Can also be triggered by automated scheduler"
+      parameters:
+        - name: "appointment_id"
+          type: "uuid"
+          required: true
+        - name: "channel"
+          type: "enum"
+          values: ["sms", "email", "phone"]
+          default: "sms"
+      preconditions:
+        - "appointment status must be in ('confirmed', 'pending_insurance')"
+        - "appointment scheduled_start must be in the future"
+      side_effects:
+        - event: "reminder_sent"
+        - action: "Log reminder delivery status"
+
+    - name: "create_referral"
+      description: "Create a new referral for a patient to see a specialist"
+      target_entity: "referral"
+      operation: "create"
+      required_permissions:
+        roles: ["practitioner", "admin"]
+      parameters:
+        - name: "patient_id"
+          type: "uuid"
+          required: true
+        - name: "target_specialty"
+          type: "enum"
+          required: true
+        - name: "target_practitioner_id"
+          type: "uuid"
+          required: false
+        - name: "reason"
+          type: "text"
+          required: true
+        - name: "clinical_notes"
+          type: "text"
+          required: false
+        - name: "diagnosis_codes"
+          type: "array"
+          required: false
+        - name: "urgency"
+          type: "enum"
+          default: "routine"
+        - name: "valid_from"
+          type: "date"
+          required: true
+        - name: "valid_until"
+          type: "date"
+          required: true
+        - name: "originating_appointment_id"
+          type: "uuid"
+          required: false
+      preconditions:
+        - "practitioner must have treats relationship with patient"
+        - "valid_until must be >= valid_from"
+      side_effects:
+        - action: "Set referral status to 'draft'"
+        - action: "Generate referral_number"
+        - action: "Check if patient's insurance requires_preauthorization for target_specialty"
+        - event: "referral_created"
+
+  # ===========================================================================
+  # 6. EVENTS — Domain events with payload schemas and routing
+  # ===========================================================================
+  events:
+    - name: "appointment_booked"
+      description: "Fired when a new appointment is successfully created"
+      trigger:
+        action: "book_appointment"
+        on: "success"
+      payload:
+        - name: "appointment_id"
+          type: "uuid"
+        - name: "patient_id"
+          type: "uuid"
+        - name: "practitioner_id"
+          type: "uuid"
+        - name: "clinic_id"
+          type: "uuid"
+        - name: "appointment_type"
+          type: "string"
+        - name: "scheduled_start"
+          type: "datetime"
+        - name: "scheduled_end"
+          type: "datetime"
+        - name: "is_emergency"
+          type: "boolean"
+        - name: "created_by"
+          type: "uuid"
+      subscribers:
+        - name: "scheduling_agent"
+          action: "schedule_reminder"
+          description: "Queue a reminder notification 24 hours before the appointment"
+        - name: "insurance_workflow"
+          action: "check_insurance_status"
+          condition: "is_emergency = false"
+          description: "Verify insurance if not already verified"
+        - name: "audit_logger"
+          action: "log_phi_access"
+          description: "Record appointment creation in HIPAA audit log"
+
+    - name: "appointment_cancelled"
+      description: "Fired when an appointment is cancelled"
+      trigger:
+        action: "cancel_appointment"
+        on: "success"
+      payload:
+        - name: "appointment_id"
+          type: "uuid"
+        - name: "patient_id"
+          type: "uuid"
+        - name: "practitioner_id"
+          type: "uuid"
+        - name: "cancellation_reason"
+          type: "string"
+        - name: "cancelled_by"
+          type: "uuid"
+        - name: "scheduled_start"
+          type: "datetime"
+        - name: "was_late_cancellation"
+          type: "boolean"
+      subscribers:
+        - name: "scheduling_agent"
+          action: "cancel_pending_reminders"
+        - name: "scheduling_agent"
+          action: "open_slot_for_waitlist"
+          description: "Offer the freed slot to patients on the waitlist"
+        - name: "billing_agent"
+          action: "assess_cancellation_fee"
+          condition: "was_late_cancellation = true"
+        - name: "audit_logger"
+          action: "log_cancellation"
+
+    - name: "appointment_rescheduled"
+      description: "Fired when an appointment is moved to a new time"
+      trigger:
+        action: "reschedule_appointment"
+        on: "success"
+      payload:
+        - name: "original_appointment_id"
+          type: "uuid"
+        - name: "new_appointment_id"
+          type: "uuid"
+        - name: "patient_id"
+          type: "uuid"
+        - name: "old_scheduled_start"
+          type: "datetime"
+        - name: "new_scheduled_start"
+          type: "datetime"
+        - name: "rescheduled_by"
+          type: "uuid"
+      subscribers:
+        - name: "notification_service"
+          action: "send_reschedule_confirmation"
+        - name: "scheduling_agent"
+          action: "update_reminders"
+
+    - name: "patient_checked_in"
+      description: "Fired when a patient checks in for their appointment"
+      trigger:
+        action: "check_in_patient"
+        on: "success"
+      payload:
+        - name: "appointment_id"
+          type: "uuid"
+        - name: "patient_id"
+          type: "uuid"
+        - name: "practitioner_id"
+          type: "uuid"
+        - name: "check_in_time"
+          type: "datetime"
+        - name: "copay_collected"
+          type: "boolean"
+      subscribers:
+        - name: "practitioner_notification"
+          action: "notify_patient_arrived"
+        - name: "wait_time_tracker"
+          action: "start_wait_timer"
+
+    - name: "appointment_started"
+      description: "Fired when a practitioner begins seeing a patient"
+      trigger:
+        action: "start_appointment"
+        on: "success"
+      payload:
+        - name: "appointment_id"
+          type: "uuid"
+        - name: "patient_id"
+          type: "uuid"
+        - name: "practitioner_id"
+          type: "uuid"
+        - name: "actual_start"
+          type: "datetime"
+        - name: "wait_time_minutes"
+          type: "integer"
+          description: "Calculated time from check-in to appointment start"
+      subscribers:
+        - name: "wait_time_tracker"
+          action: "record_wait_time"
+
+    - name: "appointment_completed"
+      description: "Fired when an appointment is marked as complete"
+      trigger:
+        action: "complete_appointment"
+        on: "success"
+      payload:
+        - name: "appointment_id"
+          type: "uuid"
+        - name: "patient_id"
+          type: "uuid"
+        - name: "practitioner_id"
+          type: "uuid"
+        - name: "appointment_type"
+          type: "string"
+        - name: "actual_start"
+          type: "datetime"
+        - name: "actual_end"
+          type: "datetime"
+        - name: "visit_duration_minutes"
+          type: "integer"
+        - name: "has_referral"
+          type: "boolean"
+      subscribers:
+        - name: "billing_agent"
+          action: "generate_encounter_record"
+        - name: "patient_notification"
+          action: "send_visit_summary"
+        - name: "analytics_pipeline"
+          action: "update_metrics"
+        - name: "audit_logger"
+          action: "log_encounter_completion"
+
+    - name: "patient_no_show"
+      description: "Fired when a patient fails to show up for a confirmed appointment"
+      trigger:
+        action: "mark_no_show"
+        on: "success"
+      payload:
+        - name: "appointment_id"
+          type: "uuid"
+        - name: "patient_id"
+          type: "uuid"
+        - name: "practitioner_id"
+          type: "uuid"
+        - name: "scheduled_start"
+          type: "datetime"
+        - name: "no_show_count"
+          type: "integer"
+          description: "Running count of no-shows for this patient in the last 12 months"
+      subscribers:
+        - name: "scheduling_agent"
+          action: "open_slot_for_waitlist"
+        - name: "patient_notification"
+          action: "send_no_show_notice"
+        - name: "billing_agent"
+          action: "assess_no_show_fee"
+        - name: "patient_risk_tracker"
+          action: "update_no_show_risk_score"
+          condition: "no_show_count >= 3"
+
+    - name: "insurance_verified"
+      description: "Fired when an insurance coverage record is verified"
+      trigger:
+        action: "verify_insurance"
+        on: "success"
+      payload:
+        - name: "coverage_id"
+          type: "uuid"
+        - name: "patient_id"
+          type: "uuid"
+        - name: "verification_status"
+          type: "string"
+        - name: "copay_amount"
+          type: "decimal"
+          nullable: true
+        - name: "verified_at"
+          type: "datetime"
+      subscribers:
+        - name: "appointment_workflow"
+          action: "update_pending_appointments"
+          condition: "verification_status = 'verified_active'"
+          description: "Transition pending_insurance appointments to confirmed"
+        - name: "patient_notification"
+          action: "send_verification_result"
+        - name: "billing_agent"
+          action: "update_expected_copay"
+          condition: "copay_amount IS NOT NULL"
+
+    - name: "referral_created"
+      description: "Fired when a new referral is created"
+      trigger:
+        action: "create_referral"
+        on: "success"
+      payload:
+        - name: "referral_id"
+          type: "uuid"
+        - name: "patient_id"
+          type: "uuid"
+        - name: "referring_practitioner_id"
+          type: "uuid"
+        - name: "target_specialty"
+          type: "string"
+        - name: "urgency"
+          type: "string"
+        - name: "requires_insurance_auth"
+          type: "boolean"
+      subscribers:
+        - name: "audit_logger"
+          action: "log_referral_creation"
+
+    - name: "referral_submitted"
+      description: "Fired when a draft referral is submitted for review"
+      trigger:
+        action: "submit_referral"
+        on: "success"
+      payload:
+        - name: "referral_id"
+          type: "uuid"
+        - name: "patient_id"
+          type: "uuid"
+        - name: "referring_practitioner_id"
+          type: "uuid"
+        - name: "target_specialty"
+          type: "string"
+        - name: "urgency"
+          type: "string"
+      subscribers:
+        - name: "referral_coordinator_notification"
+          action: "notify_new_referral"
+        - name: "insurance_workflow"
+          action: "initiate_preauthorization"
+          condition: "requires_insurance_auth = true"
+
+    - name: "referral_reviewed"
+      description: "Fired when a referral is approved or denied"
+      trigger:
+        action: "review_referral"
+        on: "success"
+      payload:
+        - name: "referral_id"
+          type: "uuid"
+        - name: "patient_id"
+          type: "uuid"
+        - name: "referring_practitioner_id"
+          type: "uuid"
+        - name: "decision"
+          type: "string"
+        - name: "denial_reason"
+          type: "string"
+          nullable: true
+        - name: "reviewed_by"
+          type: "uuid"
+        - name: "authorized_visits"
+          type: "integer"
+      subscribers:
+        - name: "practitioner_notification"
+          action: "notify_referral_decision"
+        - name: "patient_notification"
+          action: "notify_referral_decision"
+        - name: "scheduling_agent"
+          action: "prompt_appointment_booking"
+          condition: "decision = 'approved'"
+          description: "If approved, prompt patient/staff to schedule the specialist visit"
+
+    - name: "reminder_sent"
+      description: "Fired when a reminder notification is sent to a patient"
+      trigger:
+        action: "send_reminder"
+        on: "success"
+      payload:
+        - name: "appointment_id"
+          type: "uuid"
+        - name: "patient_id"
+          type: "uuid"
+        - name: "channel"
+          type: "string"
+        - name: "sent_at"
+          type: "datetime"
+        - name: "delivery_status"
+          type: "string"
+      subscribers:
+        - name: "communication_log"
+          action: "record_outbound_communication"
+
+  # ===========================================================================
+  # 7. WORKFLOWS — Multi-step processes with state machines
+  # ===========================================================================
+  workflows:
+    - name: "appointment_booking_workflow"
+      description: >
+        End-to-end workflow for booking an appointment, from availability check
+        through insurance verification to confirmation and reminder scheduling.
+      trigger:
+        type: "action"
+        action: "book_appointment"
+      steps:
+        - id: "check_availability"
+          name: "Check Practitioner Availability"
+          description: "Verify the requested time slot is available for the practitioner"
+          type: "automated"
+          action: "query"
+          target: "schedule_block"
+          checks:
+            - "practitioner has an 'available' schedule_block covering the requested time"
+            - "no existing non-cancelled appointment overlaps the requested time"
+            - "practitioner has not exceeded max_daily_appointments for the day"
+          on_success: "check_clinic_hours"
+          on_failure: "suggest_alternatives"
+
+        - id: "check_clinic_hours"
+          name: "Validate Clinic Operating Hours"
+          description: "Ensure the appointment falls within the clinic's operating hours"
+          type: "automated"
+          checks:
+            - "appointment time falls within clinic operating_hours"
+            - "clinic status is 'open'"
+          on_success: "check_referral_requirement"
+          on_failure: "reject_outside_hours"
+
+        - id: "check_referral_requirement"
+          name: "Check Referral Requirement"
+          description: "Determine if the patient needs a referral for this type of visit"
+          type: "automated"
+          checks:
+            - "if patient's insurance is HMO and practitioner is specialist, referral must exist"
+            - "if referral is required, it must be approved and not expired"
+          on_success: "check_insurance"
+          on_failure: "require_referral"
+
+        - id: "check_insurance"
+          name: "Verify Insurance Status"
+          description: "Check whether the patient's insurance is verified and active"
+          type: "automated"
+          action: "query"
+          target: "insurance_coverage"
+          branching:
+            - condition: "verification_status = 'verified_active'"
+              goto: "confirm_appointment"
+            - condition: "verification_status = 'unverified' AND is_emergency = true"
+              goto: "confirm_appointment"
+            - condition: "plan_type = 'self_pay'"
+              goto: "confirm_appointment"
+            - condition: "verification_status = 'unverified'"
+              goto: "initiate_insurance_verification"
+            - condition: "verification_status = 'verified_inactive'"
+              goto: "reject_inactive_insurance"
+
+        - id: "initiate_insurance_verification"
+          name: "Request Insurance Verification"
+          description: "Set appointment to pending and trigger insurance verification"
+          type: "automated"
+          actions:
+            - "Set appointment status to 'pending_insurance'"
+            - "Trigger verify_insurance action for patient's primary coverage"
+          on_success: "await_verification"
+
+        - id: "await_verification"
+          name: "Wait for Insurance Verification"
+          description: "Hold until insurance verification completes"
+          type: "wait"
+          wait_for:
+            event: "insurance_verified"
+            timeout: "48h"
+          branching:
+            - condition: "verification_status = 'verified_active'"
+              goto: "confirm_appointment"
+            - condition: "verification_status IN ('verified_inactive', 'verification_failed')"
+              goto: "notify_insurance_issue"
+            - condition: "timeout"
+              goto: "notify_insurance_issue"
+
+        - id: "confirm_appointment"
+          name: "Confirm Appointment"
+          description: "Transition appointment to confirmed status"
+          type: "automated"
+          actions:
+            - "Set appointment status to 'confirmed'"
+            - "Calculate and set copay_amount from insurance coverage"
+          on_success: "schedule_reminders"
+
+        - id: "schedule_reminders"
+          name: "Schedule Reminder Notifications"
+          description: "Queue up reminder messages for the patient"
+          type: "automated"
+          actions:
+            - "Schedule SMS reminder for 48 hours before appointment"
+            - "Schedule SMS reminder for 24 hours before appointment"
+            - "Schedule email reminder for 24 hours before appointment"
+          on_success: "complete"
+
+        - id: "suggest_alternatives"
+          name: "Suggest Alternative Slots"
+          description: "Find and present available time slots near the requested time"
+          type: "response"
+          output:
+            - "List of available slots for the same practitioner within 7 days"
+            - "List of available slots for other practitioners in the same specialty"
+          terminal: true
+
+        - id: "reject_outside_hours"
+          name: "Reject — Outside Operating Hours"
+          type: "response"
+          output: "Requested time is outside clinic operating hours"
+          terminal: true
+
+        - id: "require_referral"
+          name: "Require Referral"
+          type: "response"
+          output: "A referral is required for specialist visits under HMO. Please obtain a referral first."
+          terminal: true
+
+        - id: "reject_inactive_insurance"
+          name: "Reject — Inactive Insurance"
+          type: "response"
+          output: "Patient's insurance is inactive. Please update insurance information."
+          terminal: true
+
+        - id: "notify_insurance_issue"
+          name: "Notify Insurance Issue"
+          description: "Alert the patient and staff about insurance verification failure"
+          type: "automated"
+          actions:
+            - "Notify patient of insurance issue"
+            - "Notify receptionist for follow-up"
+            - "Keep appointment in 'pending_insurance' for manual resolution"
+          terminal: true
+
+        - id: "complete"
+          name: "Booking Complete"
+          type: "terminal"
+          output: "Appointment successfully booked and confirmed"
+
+    - name: "referral_processing_workflow"
+      description: >
+        Workflow for processing referrals from creation through review, approval,
+        and scheduling the referred appointment.
+      trigger:
+        type: "action"
+        action: "submit_referral"
+      steps:
+        - id: "validate_referral"
+          name: "Validate Referral Data"
+          description: "Ensure all required referral fields are populated and valid"
+          type: "automated"
+          checks:
+            - "referred_patient exists and is active"
+            - "referring_practitioner has treats relationship with patient"
+            - "target_specialty is valid"
+            - "valid_until >= valid_from"
+            - "valid_from >= current_date"
+          on_success: "check_insurance_preauth"
+          on_failure: "reject_invalid_referral"
+
+        - id: "check_insurance_preauth"
+          name: "Check Preauthorization Requirement"
+          description: "Determine if insurance requires preauthorization for this referral"
+          type: "automated"
+          branching:
+            - condition: "patient.insurance.requires_preauthorization = true AND referral_type = 'internal'"
+              goto: "request_preauthorization"
+            - condition: "patient.insurance.requires_preauthorization = false OR patient.insurance.plan_type = 'self_pay'"
+              goto: "route_for_review"
+            - condition: "urgency = 'emergent'"
+              goto: "route_for_review"
+
+        - id: "request_preauthorization"
+          name: "Request Insurance Preauthorization"
+          description: "Submit preauthorization request to the insurance provider"
+          type: "manual"
+          assigned_to: "billing_specialist"
+          instructions: "Contact insurance at preauthorization_phone to obtain auth number"
+          timeout: "72h"
+          on_success: "route_for_review"
+          on_timeout: "escalate_preauth_timeout"
+
+        - id: "route_for_review"
+          name: "Route to Referral Coordinator"
+          description: "Assign the referral to a coordinator for clinical review"
+          type: "automated"
+          actions:
+            - "Set referral status to 'under_review'"
+            - "Notify referral coordinators"
+          on_success: "coordinator_review"
+
+        - id: "coordinator_review"
+          name: "Coordinator Review"
+          description: "Referral coordinator reviews and approves or denies the referral"
+          type: "approval"
+          assigned_to: "referral_coordinator"
+          approval_action: "review_referral"
+          requirements:
+            - "Reviewer must not be the referring_practitioner (separation of duties)"
+            - "Reviewer must verify clinical appropriateness"
+            - "Reviewer must confirm target specialty matches clinical need"
+          timeout: "5d"
+          branching:
+            - condition: "decision = 'approved'"
+              goto: "notify_approval"
+            - condition: "decision = 'denied'"
+              goto: "notify_denial"
+            - condition: "timeout"
+              goto: "escalate_review_timeout"
+
+        - id: "notify_approval"
+          name: "Notify Referral Approved"
+          description: "Inform all parties and enable appointment scheduling"
+          type: "automated"
+          actions:
+            - "Notify referring_practitioner of approval"
+            - "Notify patient of approval with scheduling instructions"
+            - "If target_practitioner is set, notify them of incoming referral"
+          on_success: "await_scheduling"
+
+        - id: "await_scheduling"
+          name: "Await Appointment Scheduling"
+          description: "Wait for the patient to schedule the referred appointment"
+          type: "wait"
+          wait_for:
+            event: "appointment_booked"
+            condition: "appointment.originating_referral = this.referral_id"
+            timeout: "30d"
+          branching:
+            - condition: "appointment_booked"
+              goto: "referral_in_progress"
+            - condition: "timeout"
+              goto: "send_scheduling_reminder"
+
+        - id: "send_scheduling_reminder"
+          name: "Send Scheduling Reminder"
+          description: "Remind patient to schedule their referred appointment"
+          type: "automated"
+          actions:
+            - "Send reminder to patient to schedule specialist visit"
+            - "Notify referring_practitioner of unscheduled referral"
+          on_success: "await_scheduling_final"
+
+        - id: "await_scheduling_final"
+          name: "Final Wait for Scheduling"
+          type: "wait"
+          wait_for:
+            event: "appointment_booked"
+            condition: "appointment.originating_referral = this.referral_id"
+            timeout: "30d"
+          branching:
+            - condition: "appointment_booked"
+              goto: "referral_in_progress"
+            - condition: "timeout AND valid_until < current_date"
+              goto: "expire_referral"
+            - condition: "timeout"
+              goto: "referral_in_progress"
+
+        - id: "referral_in_progress"
+          name: "Referral In Progress"
+          description: "Referral is active and the patient is attending appointments"
+          type: "wait"
+          wait_for:
+            event: "appointment_completed"
+            condition: "appointment.originating_referral = this.referral_id AND referral.visits_used >= referral.authorized_visits"
+            timeout: "until valid_until"
+          branching:
+            - condition: "visits_used >= authorized_visits"
+              goto: "complete_referral"
+            - condition: "valid_until < current_date"
+              goto: "expire_referral"
+
+        - id: "complete_referral"
+          name: "Complete Referral"
+          description: "All authorized visits have been used"
+          type: "automated"
+          actions:
+            - "Set referral status to 'completed'"
+            - "Notify referring_practitioner that referral is complete"
+          terminal: true
+
+        - id: "expire_referral"
+          name: "Expire Referral"
+          description: "Referral validity period has passed"
+          type: "automated"
+          actions:
+            - "Set referral status to 'expired'"
+            - "Notify referring_practitioner and patient"
+          terminal: true
+
+        - id: "notify_denial"
+          name: "Notify Referral Denied"
+          type: "automated"
+          actions:
+            - "Notify referring_practitioner with denial_reason"
+            - "Notify patient that referral was not approved"
+          terminal: true
+
+        - id: "reject_invalid_referral"
+          name: "Reject Invalid Referral"
+          type: "response"
+          output: "Referral data is incomplete or invalid. Please correct and resubmit."
+          terminal: true
+
+        - id: "escalate_preauth_timeout"
+          name: "Escalate Preauthorization Timeout"
+          type: "automated"
+          actions:
+            - "Notify admin of preauthorization delay"
+            - "Notify referring_practitioner"
+          on_success: "route_for_review"
+
+        - id: "escalate_review_timeout"
+          name: "Escalate Review Timeout"
+          type: "automated"
+          actions:
+            - "Notify admin of review delay"
+            - "Reassign to next available referral coordinator"
+          on_success: "coordinator_review"
+
+    - name: "patient_check_in_workflow"
+      description: >
+        Workflow handling the patient arrival and check-in process, including
+        copay collection and wait time tracking.
+      trigger:
+        type: "event"
+        event: "patient arrives at clinic"
+      steps:
+        - id: "verify_identity"
+          name: "Verify Patient Identity"
+          description: "Confirm patient identity and locate their appointment"
+          type: "manual"
+          assigned_to: "receptionist"
+          instructions: "Verify patient identity with photo ID and date of birth"
+          on_success: "check_appointment_status"
+
+        - id: "check_appointment_status"
+          name: "Check Appointment Status"
+          description: "Verify the appointment is confirmed and within check-in window"
+          type: "automated"
+          checks:
+            - "appointment exists for today for this patient"
+            - "appointment status is 'confirmed'"
+            - "current time is within 30 minutes of scheduled_start"
+          branching:
+            - condition: "appointment found and valid"
+              goto: "verify_insurance_current"
+            - condition: "no appointment found"
+              goto: "handle_walk_in"
+            - condition: "too early for check-in"
+              goto: "advise_wait"
+
+        - id: "verify_insurance_current"
+          name: "Verify Insurance Still Current"
+          description: "Confirm insurance was verified recently and is still active"
+          type: "automated"
+          checks:
+            - "insurance verification_status = 'verified_active'"
+            - "insurance last_verified_at is within the last 30 days"
+            - "insurance termination_date IS NULL or > today"
+          on_success: "collect_copay"
+          on_failure: "flag_insurance_issue"
+
+        - id: "collect_copay"
+          name: "Collect Copay"
+          description: "Collect the patient's copay if applicable"
+          type: "manual"
+          assigned_to: "receptionist"
+          branching:
+            - condition: "copay_amount > 0 AND plan_type != 'self_pay'"
+              goto: "process_copay_payment"
+            - condition: "copay_amount = 0 OR plan_type = 'self_pay'"
+              goto: "complete_check_in"
+
+        - id: "process_copay_payment"
+          name: "Process Copay Payment"
+          type: "manual"
+          assigned_to: "receptionist"
+          on_success: "complete_check_in"
+          on_failure: "complete_check_in"
+
+        - id: "complete_check_in"
+          name: "Complete Check-In"
+          description: "Finalize check-in and notify practitioner"
+          type: "automated"
+          action: "check_in_patient"
+          terminal: true
+
+        - id: "handle_walk_in"
+          name: "Handle Walk-In Patient"
+          description: "Process a patient without a scheduled appointment"
+          type: "manual"
+          assigned_to: "receptionist"
+          instructions: "Check if clinic accepts walk-ins and if any slots are available"
+          terminal: true
+
+        - id: "advise_wait"
+          name: "Advise Patient to Wait"
+          type: "response"
+          output: "Check-in window has not opened yet. Please wait until 30 minutes before your appointment."
+          terminal: true
+
+        - id: "flag_insurance_issue"
+          name: "Flag Insurance Issue"
+          type: "automated"
+          actions:
+            - "Alert receptionist of insurance issue"
+            - "Notify billing_specialist for re-verification"
+          on_success: "collect_copay"
+
+  # ===========================================================================
+  # 8. AGENT CAPABILITIES — AI agent permissions and tool access
+  # ===========================================================================
+  agent_capabilities:
+    - name: "scheduling_agent"
+      description: >
+        AI agent that assists with appointment scheduling, availability queries,
+        and schedule optimization. Can interact with patients and staff to
+        find suitable appointment times.
+      allowed_actions:
+        - "book_appointment"
+        - "cancel_appointment"
+        - "reschedule_appointment"
+        - "send_reminder"
+        - "mark_no_show"
+      allowed_queries:
+        - entity: "appointment"
+          operations: ["read", "list", "search"]
+          scope: "All appointments at clinics the requesting user has access to"
+        - entity: "schedule_block"
+          operations: ["read", "list"]
+          scope: "All schedule blocks for active practitioners"
+        - entity: "practitioner"
+          operations: ["read", "list", "search"]
+          scope: "Active practitioners only"
+          fields_excluded: ["license_number", "phone", "email"]
+        - entity: "clinic"
+          operations: ["read", "list"]
+          scope: "All open clinics"
+        - entity: "patient"
+          operations: ["read"]
+          scope: "Only patients related to the requesting user's access scope"
+          fields_excluded: ["notes", "address"]
+      data_access_scope: >
+        Can access appointment, schedule, practitioner, and clinic data.
+        Patient data is limited to scheduling-relevant fields only.
+        Cannot access visit_notes, clinical_notes, or diagnosis_codes.
+        All PHI access is subject to HIPAA audit logging.
+      tools:
+        - name: "find_available_slots"
+          description: "Search for available appointment slots based on criteria"
+          parameters:
+            - name: "practitioner_id"
+              type: "uuid"
+              required: false
+            - name: "specialty"
+              type: "enum"
+              required: false
+            - name: "clinic_id"
+              type: "uuid"
+              required: false
+            - name: "date_range_start"
+              type: "date"
+              required: true
+            - name: "date_range_end"
+              type: "date"
+              required: true
+            - name: "appointment_type"
+              type: "enum"
+              required: false
+            - name: "duration_minutes"
+              type: "integer"
+              required: false
+          returns: "List of available time slots matching criteria"
+
+        - name: "check_practitioner_availability"
+          description: "Check if a specific practitioner is available at a given time"
+          parameters:
+            - name: "practitioner_id"
+              type: "uuid"
+              required: true
+            - name: "start_time"
+              type: "datetime"
+              required: true
+            - name: "end_time"
+              type: "datetime"
+              required: true
+          returns: "Boolean availability with conflict details if unavailable"
+
+        - name: "get_patient_upcoming_appointments"
+          description: "Retrieve a patient's upcoming scheduled appointments"
+          parameters:
+            - name: "patient_id"
+              type: "uuid"
+              required: true
+          returns: "List of upcoming appointments for the patient"
+
+        - name: "suggest_optimal_time"
+          description: >
+            Analyze practitioner schedule patterns, patient preferences, and
+            clinic utilization to suggest the best available time slot.
+          parameters:
+            - name: "patient_id"
+              type: "uuid"
+              required: true
+            - name: "practitioner_id"
+              type: "uuid"
+              required: false
+            - name: "specialty"
+              type: "enum"
+              required: false
+            - name: "urgency"
+              type: "enum"
+              values: ["routine", "urgent", "emergent"]
+              default: "routine"
+            - name: "preferred_days"
+              type: "array"
+              items:
+                type: "string"
+              required: false
+            - name: "preferred_time_of_day"
+              type: "enum"
+              values: ["morning", "afternoon", "evening", "any"]
+              default: "any"
+          returns: "Ranked list of suggested time slots with reasoning"
+
+      constraints:
+        - "Must enforce all scheduling policies (no double-booking, operating hours, etc.)"
+        - "Cannot override insurance verification requirements"
+        - "Cannot access or modify clinical/visit notes"
+        - "Must respect the requesting user's authorization scope"
+        - "All actions must be attributable to the user who initiated the agent session"
+        - "Cannot book appointments more than 6 months in the future"
+
+    - name: "billing_agent"
+      description: >
+        AI agent that handles insurance verification, copay calculations,
+        and billing-related queries. Operates under billing_specialist
+        authorization scope.
+      allowed_actions:
+        - "verify_insurance"
+      allowed_queries:
+        - entity: "insurance_coverage"
+          operations: ["read", "list", "search"]
+          scope: "All insurance records"
+        - entity: "appointment"
+          operations: ["read", "list"]
+          scope: "All appointments — for billing reconciliation"
+          fields_allowed: ["appointment_id", "patient", "practitioner", "appointment_type", "status", "copay_amount", "copay_collected", "scheduled_start", "scheduled_end", "insurance_authorization"]
+        - entity: "patient"
+          operations: ["read"]
+          scope: "All active patients"
+          fields_allowed: ["patient_id", "first_name", "last_name", "date_of_birth"]
+      data_access_scope: >
+        Can access insurance and billing-related appointment fields.
+        Cannot access clinical data (visit_notes, chief_complaint, diagnosis_codes).
+        All access is audited under HIPAA requirements.
+      tools:
+        - name: "check_coverage_eligibility"
+          description: "Query insurance provider to verify coverage eligibility"
+          parameters:
+            - name: "coverage_id"
+              type: "uuid"
+              required: true
+          returns: "Coverage eligibility status with copay and deductible details"
+
+        - name: "calculate_patient_responsibility"
+          description: "Calculate the patient's expected out-of-pocket cost for an appointment"
+          parameters:
+            - name: "appointment_id"
+              type: "uuid"
+              required: true
+          returns: "Breakdown of copay, deductible, and estimated patient responsibility"
+
+        - name: "batch_verify_insurance"
+          description: "Verify insurance for multiple patients with upcoming appointments"
+          parameters:
+            - name: "clinic_id"
+              type: "uuid"
+              required: false
+            - name: "date_range_start"
+              type: "date"
+              required: true
+            - name: "date_range_end"
+              type: "date"
+              required: true
+          returns: "Batch verification results for all unverified patients with appointments in range"
+
+      constraints:
+        - "Cannot access clinical notes or diagnosis codes"
+        - "Cannot modify appointment scheduling"
+        - "Cannot modify patient demographic data"
+        - "All insurance verification results must be logged"
+        - "Cannot override insurance verification status without external provider confirmation"
+
+    - name: "clinical_assistant_agent"
+      description: >
+        AI agent that assists practitioners with clinical workflow tasks
+        such as reviewing patient history, managing referrals, and
+        documenting visit notes. Operates under the practitioner's
+        own authorization scope.
+      allowed_actions:
+        - "complete_appointment"
+        - "create_referral"
+        - "submit_referral"
+        - "start_appointment"
+      allowed_queries:
+        - entity: "patient"
+          operations: ["read"]
+          scope: "Only patients the requesting practitioner treats"
+        - entity: "appointment"
+          operations: ["read", "list"]
+          scope: "Only the requesting practitioner's appointments"
+        - entity: "referral"
+          operations: ["read", "list"]
+          scope: "Referrals made by or targeting the requesting practitioner"
+        - entity: "insurance_coverage"
+          operations: ["read"]
+          scope: "Coverage for treated patients — for referral preauth checks"
+          fields_excluded: ["member_id", "group_number", "subscriber_name"]
+      data_access_scope: >
+        Full access to clinical data (visit_notes, chief_complaint, diagnosis_codes)
+        but ONLY for patients the practitioner has a treats relationship with.
+        Follows minimum necessary principle — only surfaces data relevant to
+        the current clinical context.
+      tools:
+        - name: "get_patient_history"
+          description: "Retrieve a patient's appointment history and clinical notes"
+          parameters:
+            - name: "patient_id"
+              type: "uuid"
+              required: true
+            - name: "lookback_months"
+              type: "integer"
+              default: 12
+          returns: "Chronological list of past appointments with visit notes"
+
+        - name: "draft_referral"
+          description: "Generate a referral draft based on clinical context"
+          parameters:
+            - name: "patient_id"
+              type: "uuid"
+              required: true
+            - name: "target_specialty"
+              type: "enum"
+              required: true
+            - name: "current_appointment_id"
+              type: "uuid"
+              required: false
+          returns: "Pre-populated referral draft for practitioner review"
+
+        - name: "summarize_visit"
+          description: "Generate a structured visit summary from practitioner notes"
+          parameters:
+            - name: "appointment_id"
+              type: "uuid"
+              required: true
+            - name: "raw_notes"
+              type: "text"
+              required: true
+          returns: "Structured visit summary with key findings, assessment, and plan"
+
+      constraints:
+        - "All actions are performed under the identity of the requesting practitioner"
+        - "Cannot access patients the practitioner does not treat"
+        - "Cannot modify another practitioner's notes or appointments"
+        - "Generated content (summaries, drafts) must be reviewed by the practitioner before saving"
+        - "Cannot submit referrals — only drafts; practitioner must explicitly submit"
+        - "PHI accessed through this agent is subject to full HIPAA audit logging"
+
+    - name: "front_desk_agent"
+      description: >
+        AI agent that assists receptionists with patient check-in,
+        appointment management, and front-desk operations. Operates
+        under the receptionist's authorization scope for their clinic.
+      allowed_actions:
+        - "book_appointment"
+        - "cancel_appointment"
+        - "reschedule_appointment"
+        - "check_in_patient"
+        - "send_reminder"
+        - "mark_no_show"
+      allowed_queries:
+        - entity: "patient"
+          operations: ["read", "search"]
+          scope: "Patients registered at the receptionist's clinic"
+          fields_excluded: ["notes"]
+        - entity: "appointment"
+          operations: ["read", "list", "search"]
+          scope: "Appointments at the receptionist's clinic"
+          fields_excluded: ["visit_notes"]
+        - entity: "practitioner"
+          operations: ["read", "list"]
+          scope: "Practitioners assigned to the receptionist's clinic"
+          fields_excluded: ["license_number"]
+        - entity: "schedule_block"
+          operations: ["read", "list"]
+          scope: "Schedule blocks at the receptionist's clinic"
+        - entity: "insurance_coverage"
+          operations: ["read"]
+          scope: "Coverage for patients at the receptionist's clinic"
+          fields_excluded: ["group_number", "subscriber_name"]
+      data_access_scope: >
+        Access limited to the receptionist's assigned clinic.
+        Cannot view clinical notes, visit notes, or detailed insurance info.
+        Can view scheduling and demographic data needed for front-desk operations.
+      tools:
+        - name: "get_todays_schedule"
+          description: "Get the full appointment schedule for a clinic or practitioner for today"
+          parameters:
+            - name: "clinic_id"
+              type: "uuid"
+              required: true
+            - name: "practitioner_id"
+              type: "uuid"
+              required: false
+          returns: "Ordered list of today's appointments with patient names and statuses"
+
+        - name: "search_patient"
+          description: "Search for a patient by name, date of birth, or phone number"
+          parameters:
+            - name: "query"
+              type: "string"
+              required: true
+            - name: "search_fields"
+              type: "array"
+              items:
+                type: "string"
+              default: ["first_name", "last_name", "date_of_birth", "phone"]
+          returns: "Matching patient records"
+
+        - name: "get_waitlist"
+          description: "Check the waitlist for a practitioner or specialty"
+          parameters:
+            - name: "practitioner_id"
+              type: "uuid"
+              required: false
+            - name: "specialty"
+              type: "enum"
+              required: false
+            - name: "clinic_id"
+              type: "uuid"
+              required: true
+          returns: "Ordered waitlist entries"
+
+      constraints:
+        - "Limited to operations at the receptionist's assigned clinic"
+        - "Cannot access clinical notes or visit documentation"
+        - "Cannot modify insurance records (read-only)"
+        - "Cannot approve or deny referrals"
+        - "All patient searches are logged for HIPAA compliance"

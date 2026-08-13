@@ -1,0 +1,250 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://allotey.ai/schemas/ir/authorization-ir.schema.json",
+  "title": "Authorization IR",
+  "description": "Defines roles, permissions, and relationship-based access control rules. Vendor-neutral representation that compilation adapters translate to specific authorization systems.",
+  "type": "object",
+  "required": ["roles", "permissions"],
+  "additionalProperties": false,
+  "properties": {
+    "roles": {
+      "type": "array",
+      "description": "Named roles that can be assigned to users or agents.",
+      "items": { "$ref": "#/definitions/role" },
+      "minItems": 1
+    },
+    "permissions": {
+      "type": "array",
+      "description": "Permission rules that grant or deny access.",
+      "items": { "$ref": "#/definitions/permission" },
+      "minItems": 1
+    },
+    "relationshipRules": {
+      "type": "array",
+      "description": "Relationship-based access rules (e.g., 'a doctor can view their own patients').",
+      "items": { "$ref": "#/definitions/relationshipRule" }
+    },
+    "hierarchies": {
+      "type": "array",
+      "description": "Role hierarchies where parent roles inherit child permissions.",
+      "items": { "$ref": "#/definitions/hierarchy" }
+    },
+    "dataScopes": {
+      "type": "array",
+      "description": "Row-level security scopes that filter data based on user context.",
+      "items": { "$ref": "#/definitions/dataScope" }
+    }
+  },
+  "definitions": {
+    "role": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique role identifier. Referenced by permission rules and other sub-IRs.",
+          "pattern": "^[a-z][a-z_0-9]*$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "inherits": {
+          "type": "array",
+          "description": "Roles whose permissions this role inherits.",
+          "items": { "type": "string" }
+        },
+        "assignableTo": {
+          "type": "array",
+          "description": "What types of principals can hold this role.",
+          "items": {
+            "type": "string",
+            "enum": ["user", "agent", "service", "group"]
+          }
+        },
+        "maxPerEntity": {
+          "type": "integer",
+          "description": "Maximum number of principals that can hold this role per entity instance.",
+          "minimum": 1
+        },
+        "tags": {
+          "type": "array",
+          "description": "Classification tags (e.g., 'admin', 'clinical', 'operational').",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "permission": {
+      "type": "object",
+      "required": ["role", "entity", "actions"],
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "type": "string",
+          "description": "Role this permission applies to."
+        },
+        "entity": {
+          "type": "string",
+          "description": "Entity type this permission governs. Use '*' for all entities.",
+          "pattern": "^([A-Z][a-zA-Z0-9]*|\\*)$"
+        },
+        "actions": {
+          "type": "array",
+          "description": "Actions permitted on the entity.",
+          "items": {
+            "type": "string",
+            "enum": ["create", "read", "update", "delete", "list", "export", "approve", "assign", "execute", "*"]
+          },
+          "minItems": 1
+        },
+        "effect": {
+          "type": "string",
+          "description": "Whether this rule allows or denies the actions.",
+          "enum": ["allow", "deny"],
+          "default": "allow"
+        },
+        "conditions": {
+          "type": "array",
+          "description": "Conditions that must be met for this permission to apply.",
+          "items": { "$ref": "#/definitions/condition" }
+        },
+        "fields": {
+          "type": "array",
+          "description": "Specific properties the permission applies to. If omitted, all properties are included.",
+          "items": { "type": "string" }
+        },
+        "excludeFields": {
+          "type": "array",
+          "description": "Properties explicitly excluded from this permission.",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Type of condition.",
+          "enum": [
+            "property_equals",
+            "property_in",
+            "relationship_exists",
+            "time_range",
+            "context_matches",
+            "expression"
+          ]
+        },
+        "property": {
+          "type": "string",
+          "description": "Property to evaluate."
+        },
+        "operator": {
+          "type": "string",
+          "enum": ["equals", "not_equals", "in", "not_in", "gt", "gte", "lt", "lte"]
+        },
+        "value": {
+          "description": "Value to compare against."
+        },
+        "relationship": {
+          "type": "string",
+          "description": "Relationship name for relationship_exists conditions."
+        },
+        "expression": {
+          "type": "string",
+          "description": "Free-form boolean expression for complex conditions."
+        }
+      }
+    },
+    "relationshipRule": {
+      "type": "object",
+      "required": ["name", "subject", "relation", "object", "grant"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable rule name."
+        },
+        "description": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string",
+          "description": "The principal type (role or entity) requesting access."
+        },
+        "relation": {
+          "type": "string",
+          "description": "The relationship between subject and object (e.g., 'assigned_to', 'owner', 'member_of')."
+        },
+        "object": {
+          "type": "string",
+          "description": "The target entity type."
+        },
+        "grant": {
+          "type": "array",
+          "description": "Actions granted when the relationship exists.",
+          "items": {
+            "type": "string",
+            "enum": ["create", "read", "update", "delete", "list", "export", "approve", "assign", "execute", "*"]
+          },
+          "minItems": 1
+        },
+        "transitive": {
+          "type": "boolean",
+          "description": "Whether the rule applies transitively through relationship chains.",
+          "default": false
+        },
+        "transitiveThrough": {
+          "type": "array",
+          "description": "Relationship path for transitive access (e.g., ['patient', 'medicalRecord'] means doctor->patient->medicalRecord).",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "hierarchy": {
+      "type": "object",
+      "required": ["parent", "child"],
+      "additionalProperties": false,
+      "properties": {
+        "parent": {
+          "type": "string",
+          "description": "Parent role that inherits from child."
+        },
+        "child": {
+          "type": "string",
+          "description": "Child role whose permissions are inherited."
+        }
+      }
+    },
+    "dataScope": {
+      "type": "object",
+      "required": ["name", "entity", "filter"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Scope name."
+        },
+        "description": {
+          "type": "string"
+        },
+        "entity": {
+          "type": "string",
+          "description": "Entity this scope applies to.",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "roles": {
+          "type": "array",
+          "description": "Roles this scope applies to. If omitted, applies to all roles.",
+          "items": { "type": "string" }
+        },
+        "filter": {
+          "type": "string",
+          "description": "Filter expression that references the current user context (e.g., 'entity.clinicId == user.clinicId')."
+        }
+      }
+    }
+  }
+}

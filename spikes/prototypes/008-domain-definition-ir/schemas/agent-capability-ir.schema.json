@@ -1,0 +1,396 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://allotey.ai/schemas/ir/agent-capability-ir.schema.json",
+  "title": "Agent Capability IR",
+  "description": "Defines agent capabilities, tool access, reasoning patterns, guardrails, and behavioral constraints for AI agents operating within the domain.",
+  "type": "object",
+  "required": ["capabilities"],
+  "additionalProperties": false,
+  "properties": {
+    "capabilities": {
+      "type": "array",
+      "description": "All agent capabilities in the domain.",
+      "items": { "$ref": "#/definitions/capability" },
+      "minItems": 1
+    },
+    "personas": {
+      "type": "array",
+      "description": "Named agent personas that bundle capabilities together.",
+      "items": { "$ref": "#/definitions/persona" }
+    },
+    "guardrails": {
+      "type": "array",
+      "description": "Global guardrails that apply across all agent capabilities.",
+      "items": { "$ref": "#/definitions/guardrail" }
+    }
+  },
+  "definitions": {
+    "capability": {
+      "type": "object",
+      "required": ["name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique capability identifier.",
+          "pattern": "^[a-z][a-zA-Z0-9]*$"
+        },
+        "description": {
+          "type": "string",
+          "description": "What this capability allows the agent to do."
+        },
+        "domain": {
+          "type": "string",
+          "description": "Subdomain this capability belongs to (e.g., 'scheduling', 'diagnostics', 'telemetry')."
+        },
+        "tools": {
+          "type": "array",
+          "description": "Actions this capability has access to (references action names from the Action IR).",
+          "items": { "type": "string" }
+        },
+        "entities": {
+          "type": "array",
+          "description": "Entities this capability can read/query.",
+          "items": { "type": "string" }
+        },
+        "semanticCubes": {
+          "type": "array",
+          "description": "Semantic cubes this capability can query (references cube names from the Semantic IR).",
+          "items": { "type": "string" }
+        },
+        "reasoningPattern": {
+          "$ref": "#/definitions/reasoningPattern",
+          "description": "How the agent should approach tasks for this capability."
+        },
+        "requiredRole": {
+          "type": "string",
+          "description": "Authorization role the agent must hold to use this capability."
+        },
+        "instructions": {
+          "type": "string",
+          "description": "System-level instructions appended to the agent's prompt when using this capability."
+        },
+        "examples": {
+          "type": "array",
+          "description": "Few-shot examples for this capability.",
+          "items": { "$ref": "#/definitions/example" }
+        },
+        "guardrails": {
+          "type": "array",
+          "description": "Capability-specific guardrails.",
+          "items": { "$ref": "#/definitions/guardrail" }
+        },
+        "contextWindow": {
+          "$ref": "#/definitions/contextWindow",
+          "description": "What context the agent receives when using this capability."
+        },
+        "outputFormat": {
+          "$ref": "#/definitions/outputFormat",
+          "description": "Expected output structure."
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "persona": {
+      "type": "object",
+      "required": ["name", "capabilities"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Persona name (e.g., 'clinicReceptionist', 'iotOperator').",
+          "pattern": "^[a-z][a-zA-Z0-9]*$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "description": "Authorization role this persona operates under."
+        },
+        "capabilities": {
+          "type": "array",
+          "description": "Capabilities available to this persona.",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "systemPrompt": {
+          "type": "string",
+          "description": "Base system prompt for this persona."
+        },
+        "tone": {
+          "type": "string",
+          "description": "Communication tone.",
+          "enum": ["professional", "friendly", "technical", "empathetic", "concise"]
+        },
+        "maxConcurrentTasks": {
+          "type": "integer",
+          "description": "Maximum tasks this persona can handle simultaneously.",
+          "minimum": 1,
+          "default": 1
+        },
+        "escalateTo": {
+          "type": "string",
+          "description": "Persona or role to escalate to when the agent cannot handle a request."
+        }
+      }
+    },
+    "reasoningPattern": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Pattern type.",
+          "enum": [
+            "direct",
+            "chain_of_thought",
+            "plan_and_execute",
+            "react",
+            "retrieval_augmented",
+            "multi_step_verification"
+          ]
+        },
+        "maxSteps": {
+          "type": "integer",
+          "description": "Maximum reasoning/action steps before the agent must conclude.",
+          "minimum": 1,
+          "default": 10
+        },
+        "planFirst": {
+          "type": "boolean",
+          "description": "Whether the agent should produce a plan before acting.",
+          "default": false
+        },
+        "verifyResults": {
+          "type": "boolean",
+          "description": "Whether the agent should verify action results before proceeding.",
+          "default": false
+        },
+        "retrievalSources": {
+          "type": "array",
+          "description": "Knowledge sources for retrieval-augmented reasoning.",
+          "items": {
+            "type": "object",
+            "required": ["name", "type"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "type": {
+                "type": "string",
+                "enum": ["entity_store", "document_store", "vector_search", "semantic_query"]
+              },
+              "entity": {
+                "type": "string",
+                "description": "Entity type for entity_store sources."
+              },
+              "cube": {
+                "type": "string",
+                "description": "Semantic cube for semantic_query sources."
+              },
+              "maxResults": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 10
+              }
+            }
+          }
+        }
+      }
+    },
+    "guardrail": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Guardrail name."
+        },
+        "description": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "description": "Guardrail type.",
+          "enum": [
+            "content_filter",
+            "action_restriction",
+            "rate_limit",
+            "data_boundary",
+            "confirmation_required",
+            "output_validation",
+            "topic_restriction",
+            "pii_protection"
+          ]
+        },
+        "severity": {
+          "type": "string",
+          "description": "What happens when the guardrail triggers.",
+          "enum": ["block", "warn", "log"],
+          "default": "block"
+        },
+        "condition": {
+          "type": "string",
+          "description": "When this guardrail applies (expression)."
+        },
+        "blockedActions": {
+          "type": "array",
+          "description": "Actions that cannot be performed (for action_restriction).",
+          "items": { "type": "string" }
+        },
+        "blockedEntities": {
+          "type": "array",
+          "description": "Entities that cannot be accessed (for data_boundary).",
+          "items": { "type": "string" }
+        },
+        "blockedTopics": {
+          "type": "array",
+          "description": "Topics the agent must not discuss (for topic_restriction).",
+          "items": { "type": "string" }
+        },
+        "piiFields": {
+          "type": "array",
+          "description": "Fields containing PII that must be handled carefully.",
+          "items": { "type": "string" }
+        },
+        "piiAction": {
+          "type": "string",
+          "description": "How to handle PII fields.",
+          "enum": ["mask", "redact", "encrypt", "deny_access"]
+        },
+        "maxRequestsPerMinute": {
+          "type": "integer",
+          "description": "Rate limit for rate_limit guardrails.",
+          "minimum": 1
+        },
+        "requireConfirmationFor": {
+          "type": "array",
+          "description": "Actions requiring human confirmation.",
+          "items": { "type": "string" }
+        },
+        "message": {
+          "type": "string",
+          "description": "Message to display when the guardrail triggers."
+        }
+      }
+    },
+    "example": {
+      "type": "object",
+      "required": ["userMessage", "expectedBehavior"],
+      "additionalProperties": false,
+      "properties": {
+        "userMessage": {
+          "type": "string",
+          "description": "Example user input."
+        },
+        "expectedBehavior": {
+          "type": "string",
+          "description": "Description of expected agent behavior."
+        },
+        "toolCalls": {
+          "type": "array",
+          "description": "Expected sequence of tool/action calls.",
+          "items": {
+            "type": "object",
+            "required": ["action"],
+            "additionalProperties": false,
+            "properties": {
+              "action": { "type": "string" },
+              "input": { "type": "object" },
+              "expectedOutput": { "type": "object" }
+            }
+          }
+        },
+        "expectedResponse": {
+          "type": "string",
+          "description": "Example response text."
+        }
+      }
+    },
+    "contextWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "includeEntitySchemas": {
+          "type": "array",
+          "description": "Entity schemas to include in the agent's context.",
+          "items": { "type": "string" }
+        },
+        "includeRelatedEntities": {
+          "type": "boolean",
+          "description": "Whether to include schemas of related entities.",
+          "default": false
+        },
+        "includeSemanticDefinitions": {
+          "type": "boolean",
+          "description": "Whether to include semantic cube definitions.",
+          "default": false
+        },
+        "includeRecentEvents": {
+          "type": "boolean",
+          "description": "Whether to include recent domain events in context.",
+          "default": false
+        },
+        "recentEventsLimit": {
+          "type": "integer",
+          "description": "How many recent events to include.",
+          "minimum": 1,
+          "default": 10
+        },
+        "customContext": {
+          "type": "array",
+          "description": "Additional context items to include.",
+          "items": {
+            "type": "object",
+            "required": ["name", "source"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "source": {
+                "type": "string",
+                "description": "Expression or reference for the context data."
+              }
+            }
+          }
+        }
+      }
+    },
+    "outputFormat": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Expected output type.",
+          "enum": ["text", "structured", "table", "chart_spec", "mixed"],
+          "default": "text"
+        },
+        "schema": {
+          "type": "object",
+          "description": "JSON schema for structured output.",
+          "additionalProperties": true
+        },
+        "maxLength": {
+          "type": "integer",
+          "description": "Maximum response length in characters.",
+          "minimum": 1
+        },
+        "includeReferences": {
+          "type": "boolean",
+          "description": "Whether to cite entity references in the response.",
+          "default": false
+        },
+        "includeSources": {
+          "type": "boolean",
+          "description": "Whether to include source attribution.",
+          "default": false
+        }
+      }
+    }
+  }
+}

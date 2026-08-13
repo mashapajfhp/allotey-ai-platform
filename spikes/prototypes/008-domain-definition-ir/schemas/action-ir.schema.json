@@ -1,0 +1,352 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://allotey.ai/schemas/ir/action-ir.schema.json",
+  "title": "Action IR",
+  "description": "Defines domain operations (commands), their inputs, outputs, side effects, validation rules, and tool bindings that agents can invoke.",
+  "type": "object",
+  "required": ["actions"],
+  "additionalProperties": false,
+  "properties": {
+    "actions": {
+      "type": "array",
+      "description": "All domain actions/operations.",
+      "items": { "$ref": "#/definitions/action" },
+      "minItems": 1
+    }
+  },
+  "definitions": {
+    "action": {
+      "type": "object",
+      "required": ["name", "type", "entity"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique action name. Used as the tool/command identifier.",
+          "pattern": "^[a-z][a-zA-Z0-9]*$"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this action does. Used in agent tool descriptions."
+        },
+        "type": {
+          "type": "string",
+          "description": "Classification of the action.",
+          "enum": ["command", "query", "mutation", "side_effect"]
+        },
+        "entity": {
+          "type": "string",
+          "description": "Primary entity this action operates on.",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "operation": {
+          "type": "string",
+          "description": "CRUD operation or custom. Custom operations must define their own semantics.",
+          "enum": ["create", "read", "update", "delete", "custom"]
+        },
+        "idempotent": {
+          "type": "boolean",
+          "description": "Whether calling this action multiple times with the same input produces the same result.",
+          "default": false
+        },
+        "input": {
+          "$ref": "#/definitions/actionSchema",
+          "description": "Input schema for the action."
+        },
+        "output": {
+          "$ref": "#/definitions/actionSchema",
+          "description": "Output schema for the action."
+        },
+        "preconditions": {
+          "type": "array",
+          "description": "Conditions that must be true before the action can execute.",
+          "items": { "$ref": "#/definitions/precondition" }
+        },
+        "postconditions": {
+          "type": "array",
+          "description": "Conditions guaranteed to be true after successful execution.",
+          "items": { "$ref": "#/definitions/postcondition" }
+        },
+        "sideEffects": {
+          "type": "array",
+          "description": "Side effects triggered by this action.",
+          "items": { "$ref": "#/definitions/sideEffect" }
+        },
+        "authorization": {
+          "$ref": "#/definitions/actionAuthorization",
+          "description": "Authorization requirements for this action."
+        },
+        "rateLimiting": {
+          "$ref": "#/definitions/rateLimit",
+          "description": "Rate limiting configuration."
+        },
+        "toolBinding": {
+          "$ref": "#/definitions/toolBinding",
+          "description": "How this action is exposed as a tool for agents."
+        },
+        "emitsEvents": {
+          "type": "array",
+          "description": "Domain events emitted when this action succeeds.",
+          "items": { "type": "string" }
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "actionSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fields": {
+          "type": "array",
+          "description": "Fields in the input or output.",
+          "items": { "$ref": "#/definitions/fieldDef" }
+        }
+      }
+    },
+    "fieldDef": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Field name.",
+          "pattern": "^[a-z][a-zA-Z0-9]*$"
+        },
+        "type": {
+          "type": "string",
+          "description": "Field data type.",
+          "enum": ["string", "integer", "number", "boolean", "date", "timestamp", "enum", "reference", "array", "object"]
+        },
+        "description": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
+        "enumValues": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "referenceTo": {
+          "type": "string",
+          "description": "Target entity for reference types.",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "arrayItemType": {
+          "type": "string",
+          "description": "Type of items when type is 'array'."
+        },
+        "default": {
+          "description": "Default value."
+        },
+        "validation": {
+          "type": "object",
+          "description": "Validation rules for this field.",
+          "additionalProperties": false,
+          "properties": {
+            "minLength": { "type": "integer" },
+            "maxLength": { "type": "integer" },
+            "minimum": { "type": "number" },
+            "maximum": { "type": "number" },
+            "pattern": { "type": "string" }
+          }
+        }
+      }
+    },
+    "precondition": {
+      "type": "object",
+      "required": ["description", "expression"],
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Human-readable explanation of the precondition."
+        },
+        "expression": {
+          "type": "string",
+          "description": "Boolean expression that must evaluate to true (e.g., 'entity.status == active')."
+        },
+        "errorCode": {
+          "type": "string",
+          "description": "Error code returned when precondition fails."
+        },
+        "errorMessage": {
+          "type": "string",
+          "description": "Error message returned when precondition fails."
+        }
+      }
+    },
+    "postcondition": {
+      "type": "object",
+      "required": ["description", "expression"],
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "expression": {
+          "type": "string",
+          "description": "Boolean expression guaranteed to be true after execution."
+        }
+      }
+    },
+    "sideEffect": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Type of side effect.",
+          "enum": [
+            "emit_event",
+            "send_notification",
+            "update_entity",
+            "create_entity",
+            "schedule_task",
+            "call_external",
+            "log_audit"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string",
+          "description": "Target entity or event name."
+        },
+        "condition": {
+          "type": "string",
+          "description": "Optional condition for conditional side effects."
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Parameters for the side effect.",
+          "additionalProperties": true
+        },
+        "async": {
+          "type": "boolean",
+          "description": "Whether the side effect runs asynchronously.",
+          "default": true
+        },
+        "retryable": {
+          "type": "boolean",
+          "description": "Whether the side effect can be retried on failure.",
+          "default": true
+        }
+      }
+    },
+    "actionAuthorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requiredRoles": {
+          "type": "array",
+          "description": "Roles that can execute this action (OR logic).",
+          "items": { "type": "string" }
+        },
+        "requireAll": {
+          "type": "boolean",
+          "description": "If true, all listed roles are required (AND logic).",
+          "default": false
+        },
+        "additionalChecks": {
+          "type": "array",
+          "description": "Additional authorization checks beyond role-based.",
+          "items": {
+            "type": "object",
+            "required": ["type", "expression"],
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["relationship", "attribute", "custom"]
+              },
+              "expression": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "rateLimit": {
+      "type": "object",
+      "required": ["maxRequests", "windowSeconds"],
+      "additionalProperties": false,
+      "properties": {
+        "maxRequests": {
+          "type": "integer",
+          "description": "Maximum number of requests allowed in the window.",
+          "minimum": 1
+        },
+        "windowSeconds": {
+          "type": "integer",
+          "description": "Time window in seconds.",
+          "minimum": 1
+        },
+        "scope": {
+          "type": "string",
+          "description": "Rate limit scope.",
+          "enum": ["per_user", "per_role", "per_agent", "global"],
+          "default": "per_user"
+        }
+      }
+    },
+    "toolBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether this action is exposed as an agent tool.",
+          "default": true
+        },
+        "name": {
+          "type": "string",
+          "description": "Override tool name. Defaults to action name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Override tool description. Defaults to action description."
+        },
+        "confirmationRequired": {
+          "type": "boolean",
+          "description": "Whether the agent must confirm with the user before executing.",
+          "default": false
+        },
+        "humanInTheLoop": {
+          "type": "boolean",
+          "description": "Whether a human must approve before execution.",
+          "default": false
+        },
+        "maxTokenBudget": {
+          "type": "integer",
+          "description": "Maximum token budget for the response.",
+          "minimum": 1
+        },
+        "examples": {
+          "type": "array",
+          "description": "Example invocations for few-shot prompting.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "input": { "type": "object" },
+              "output": { "type": "object" },
+              "description": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

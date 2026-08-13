@@ -1,0 +1,332 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://allotey.ai/schemas/ir/ontology-ir.schema.json",
+  "title": "Ontology IR",
+  "description": "Defines entity types, their properties, relationships, constraints, and inheritance hierarchies for a domain.",
+  "type": "object",
+  "required": ["entities"],
+  "additionalProperties": false,
+  "properties": {
+    "entities": {
+      "type": "array",
+      "description": "All entity types in the domain ontology.",
+      "items": { "$ref": "#/definitions/entity" },
+      "minItems": 1
+    },
+    "enums": {
+      "type": "array",
+      "description": "Named enumerations shared across entities.",
+      "items": { "$ref": "#/definitions/enumDefinition" }
+    }
+  },
+  "definitions": {
+    "entity": {
+      "type": "object",
+      "required": ["name", "properties"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "PascalCase entity type name. Referenced by other sub-IRs.",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable explanation of what this entity represents."
+        },
+        "extends": {
+          "type": "string",
+          "description": "Parent entity name for single inheritance.",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "abstract": {
+          "type": "boolean",
+          "description": "If true, this entity cannot be instantiated directly. Used as a base for inheritance.",
+          "default": false
+        },
+        "tags": {
+          "type": "array",
+          "description": "Classification tags for compilation adapters (e.g., 'auditable', 'soft-delete', 'versioned').",
+          "items": { "type": "string" }
+        },
+        "properties": {
+          "type": "array",
+          "description": "Fields/attributes of this entity.",
+          "items": { "$ref": "#/definitions/property" },
+          "minItems": 1
+        },
+        "relationships": {
+          "type": "array",
+          "description": "Relationships to other entities.",
+          "items": { "$ref": "#/definitions/relationship" }
+        },
+        "constraints": {
+          "type": "array",
+          "description": "Entity-level validation constraints.",
+          "items": { "$ref": "#/definitions/constraint" }
+        },
+        "indexes": {
+          "type": "array",
+          "description": "Indexes for query optimization.",
+          "items": { "$ref": "#/definitions/index" }
+        }
+      }
+    },
+    "property": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "camelCase property name.",
+          "pattern": "^[a-z][a-zA-Z0-9]*$"
+        },
+        "type": {
+          "type": "string",
+          "description": "Data type of the property.",
+          "enum": [
+            "string",
+            "integer",
+            "number",
+            "boolean",
+            "date",
+            "timestamp",
+            "enum",
+            "text",
+            "vector",
+            "reference",
+            "json",
+            "uuid",
+            "url",
+            "email",
+            "duration",
+            "geo_point"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether this property must be provided on creation.",
+          "default": false
+        },
+        "unique": {
+          "type": "boolean",
+          "description": "Whether values must be unique across all instances.",
+          "default": false
+        },
+        "immutable": {
+          "type": "boolean",
+          "description": "Whether the value can be changed after creation.",
+          "default": false
+        },
+        "default": {
+          "description": "Default value if not provided. Type must match the property type."
+        },
+        "enumValues": {
+          "type": "array",
+          "description": "Allowed values when type is 'enum'. Inline enum definition.",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "enumRef": {
+          "type": "string",
+          "description": "Reference to a named enum defined in the enums array."
+        },
+        "referenceTo": {
+          "type": "string",
+          "description": "Target entity name when type is 'reference'.",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "vectorDimensions": {
+          "type": "integer",
+          "description": "Number of dimensions when type is 'vector'.",
+          "minimum": 1
+        },
+        "minLength": {
+          "type": "integer",
+          "description": "Minimum string length.",
+          "minimum": 0
+        },
+        "maxLength": {
+          "type": "integer",
+          "description": "Maximum string length.",
+          "minimum": 1
+        },
+        "minimum": {
+          "type": "number",
+          "description": "Minimum numeric value."
+        },
+        "maximum": {
+          "type": "number",
+          "description": "Maximum numeric value."
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Regex pattern for string validation."
+        },
+        "sensitive": {
+          "type": "boolean",
+          "description": "Whether this property contains sensitive/PII data that requires special handling.",
+          "default": false
+        },
+        "computed": {
+          "type": "boolean",
+          "description": "Whether this property is derived/computed rather than stored.",
+          "default": false
+        },
+        "computeExpression": {
+          "type": "string",
+          "description": "Expression for computed properties. Syntax is domain-specific."
+        }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "required": ["name", "type", "target"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Relationship name, typically camelCase.",
+          "pattern": "^[a-z][a-zA-Z0-9]*$"
+        },
+        "type": {
+          "type": "string",
+          "description": "Cardinality of the relationship.",
+          "enum": ["belongs_to", "has_many", "has_one", "many_to_many"]
+        },
+        "target": {
+          "type": "string",
+          "description": "Target entity name.",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "inverse": {
+          "type": "string",
+          "description": "Name of the inverse relationship on the target entity."
+        },
+        "through": {
+          "type": "string",
+          "description": "Join entity for many_to_many relationships.",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "foreignKey": {
+          "type": "string",
+          "description": "Foreign key property name on the owning side."
+        },
+        "onDelete": {
+          "type": "string",
+          "description": "Behavior when the referenced entity is deleted.",
+          "enum": ["cascade", "restrict", "set_null", "no_action"],
+          "default": "restrict"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether the relationship must be populated.",
+          "default": false
+        }
+      }
+    },
+    "constraint": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable constraint name."
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of constraint.",
+          "enum": [
+            "unique_together",
+            "check",
+            "conditional_required",
+            "mutual_exclusion",
+            "at_least_one"
+          ]
+        },
+        "properties": {
+          "type": "array",
+          "description": "Properties involved in the constraint.",
+          "items": { "type": "string" }
+        },
+        "expression": {
+          "type": "string",
+          "description": "Boolean expression for check constraints."
+        },
+        "message": {
+          "type": "string",
+          "description": "Error message when constraint is violated."
+        }
+      }
+    },
+    "index": {
+      "type": "object",
+      "required": ["properties"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Optional index name."
+        },
+        "properties": {
+          "type": "array",
+          "description": "Properties to index.",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "unique": {
+          "type": "boolean",
+          "default": false
+        },
+        "type": {
+          "type": "string",
+          "description": "Index type hint for compilation adapters.",
+          "enum": ["btree", "hash", "gin", "gist", "vector_cosine", "vector_l2", "fulltext"]
+        }
+      }
+    },
+    "enumDefinition": {
+      "type": "object",
+      "required": ["name", "values"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Enum name, referenced by property enumRef.",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "required": ["value"],
+                "additionalProperties": false,
+                "properties": {
+                  "value": { "type": "string" },
+                  "label": { "type": "string" },
+                  "description": { "type": "string" },
+                  "deprecated": { "type": "boolean", "default": false }
+                }
+              }
+            ]
+          },
+          "minItems": 1
+        }
+      }
+    }
+  }
+}

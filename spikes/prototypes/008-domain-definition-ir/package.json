@@ -1,0 +1,22 @@
+{
+  "name": "008-domain-definition-ir",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Spike 008: Domain Definition IR Compiler prototype",
+  "scripts": {
+    "compile": "node src/cli.js",
+    "test": "node --test test/*.test.js",
+    "validate": "node src/cli.js validate",
+    "compile:healthcare": "node src/cli.js compile domains/healthcare-clinic",
+    "compile:iot": "node src/cli.js compile domains/iot-monitoring",
+    "audit:core": "node src/cli.js audit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "js-yaml": "^5.2.3"
+  }
+}

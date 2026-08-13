@@ -1,0 +1,155 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://allotey.ai/schemas/ir/domain-definition.schema.json",
+  "title": "Domain Definition IR",
+  "description": "Top-level envelope for a complete domain definition. Composes all sub-IRs into a single, validatable document that can be compiled to vendor-specific targets.",
+  "type": "object",
+  "required": ["domain_definition"],
+  "additionalProperties": false,
+  "properties": {
+    "domain_definition": {
+      "type": "object",
+      "required": ["name", "version", "ontology"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique domain identifier (e.g., 'healthcare-clinic', 'iot-monitoring')."
+        },
+        "version": {
+          "type": "string",
+          "description": "Semantic version of this domain definition.",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.]+)?$"
+        },
+        "ir_schema_version": {
+          "type": "string",
+          "description": "Version of the IR schema this definition conforms to."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the domain."
+        },
+        "metadata": {
+          "$ref": "#/definitions/metadata",
+          "description": "Domain metadata for tooling and documentation."
+        },
+        "ontology": {
+          "type": "object",
+          "description": "Entity types, properties, relationships, and constraints."
+        },
+        "semantic": {
+          "type": "object",
+          "description": "Metrics, dimensions, measures, and analytical models."
+        },
+        "authorization": {
+          "type": "object",
+          "description": "Roles, permissions, and relationship-based access control."
+        },
+        "policy": {
+          "type": "object",
+          "description": "Data governance, compliance, and business rules."
+        },
+        "actions": {
+          "type": ["object", "array"],
+          "description": "Domain operations, commands, and tool bindings."
+        },
+        "events": {
+          "type": ["object", "array"],
+          "description": "Domain events, triggers, and subscriptions."
+        },
+        "workflows": {
+          "type": ["object", "array"],
+          "description": "Multi-step processes, approval chains, and orchestration."
+        },
+        "agent_capabilities": {
+          "type": ["object", "array"],
+          "description": "Agent capabilities, personas, tool access, and guardrails."
+        },
+        "compilation_hints": {
+          "$ref": "#/definitions/compilationHints",
+          "description": "Optional hints for compilation adapters."
+        }
+      }
+    }
+  },
+  "definitions": {
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable domain name."
+        },
+        "owner": {
+          "type": "string",
+          "description": "Team or individual responsible for this domain definition."
+        },
+        "tags": {
+          "type": "array",
+          "description": "Classification tags for the domain.",
+          "items": { "type": "string" }
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "compilationHints": {
+      "type": "object",
+      "description": "Non-prescriptive hints for compilation adapters.",
+      "properties": {
+        "data_store": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["relational", "document", "graph", "time_series", "key_value", "multi_model"]
+            },
+            "multi_tenant": { "type": "boolean", "default": false },
+            "tenant_isolation": {
+              "type": "string",
+              "enum": ["row_level", "schema_level", "database_level"]
+            }
+          }
+        },
+        "semantic_layer": {
+          "type": "object",
+          "properties": {
+            "caching": { "type": "boolean", "default": true },
+            "pre_aggregation": { "type": "boolean", "default": false },
+            "realtime": { "type": "boolean", "default": false }
+          }
+        },
+        "authorization_engine": {
+          "type": "object",
+          "properties": {
+            "model": {
+              "type": "string",
+              "enum": ["rbac", "abac", "rebac", "hybrid"]
+            }
+          }
+        },
+        "workflow_engine": {
+          "type": "object",
+          "properties": {
+            "durable_execution": { "type": "boolean", "default": true }
+          }
+        },
+        "agent_runtime": {
+          "type": "object",
+          "properties": {
+            "tool_protocol": {
+              "type": "string",
+              "enum": ["function_calling", "tool_use", "plugin"]
+            },
+            "sandboxed": { "type": "boolean", "default": true }
+          }
+        }
+      }
+    }
+  }
+}

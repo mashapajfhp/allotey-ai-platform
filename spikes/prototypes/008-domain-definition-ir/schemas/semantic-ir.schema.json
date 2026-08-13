@@ -1,0 +1,290 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://allotey.ai/schemas/ir/semantic-ir.schema.json",
+  "title": "Semantic IR",
+  "description": "Defines metrics, dimensions, and measures for analytical querying. Provides the semantic layer that agents use to answer questions about domain data.",
+  "type": "object",
+  "required": ["cubes"],
+  "additionalProperties": false,
+  "properties": {
+    "cubes": {
+      "type": "array",
+      "description": "Semantic cubes that define queryable analytical models.",
+      "items": { "$ref": "#/definitions/cube" },
+      "minItems": 1
+    },
+    "globalDimensions": {
+      "type": "array",
+      "description": "Dimensions shared across multiple cubes (e.g., time, geography).",
+      "items": { "$ref": "#/definitions/dimension" }
+    }
+  },
+  "definitions": {
+    "cube": {
+      "type": "object",
+      "required": ["name", "entity", "measures"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique name for this semantic cube.",
+          "pattern": "^[a-z][a-z_0-9]*$"
+        },
+        "description": {
+          "type": "string",
+          "description": "Natural language description of what this cube measures."
+        },
+        "entity": {
+          "type": "string",
+          "description": "Primary entity from the ontology IR that this cube is built on.",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "joins": {
+          "type": "array",
+          "description": "Joins to related entities for enriching the cube.",
+          "items": { "$ref": "#/definitions/join" }
+        },
+        "dimensions": {
+          "type": "array",
+          "description": "Attributes by which data can be grouped, filtered, or sliced.",
+          "items": { "$ref": "#/definitions/dimension" }
+        },
+        "measures": {
+          "type": "array",
+          "description": "Quantitative aggregations computed over the data.",
+          "items": { "$ref": "#/definitions/measure" },
+          "minItems": 1
+        },
+        "metrics": {
+          "type": "array",
+          "description": "Derived calculations composed from measures and dimensions.",
+          "items": { "$ref": "#/definitions/metric" }
+        },
+        "segments": {
+          "type": "array",
+          "description": "Named filter presets for common analytical views.",
+          "items": { "$ref": "#/definitions/segment" }
+        },
+        "preAggregations": {
+          "type": "array",
+          "description": "Hints for compilation adapters about materialized rollups.",
+          "items": { "$ref": "#/definitions/preAggregation" }
+        }
+      }
+    },
+    "dimension": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Dimension name.",
+          "pattern": "^[a-z][a-zA-Z0-9]*$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "description": "Data type of the dimension.",
+          "enum": ["string", "number", "boolean", "time", "geo"]
+        },
+        "property": {
+          "type": "string",
+          "description": "Source property on the entity. If omitted, name is used."
+        },
+        "expression": {
+          "type": "string",
+          "description": "Computed expression for derived dimensions."
+        },
+        "granularity": {
+          "type": "string",
+          "description": "Time granularity for time dimensions.",
+          "enum": ["second", "minute", "hour", "day", "week", "month", "quarter", "year"]
+        },
+        "primaryKey": {
+          "type": "boolean",
+          "description": "Whether this dimension serves as the primary key.",
+          "default": false
+        },
+        "shown": {
+          "type": "boolean",
+          "description": "Whether this dimension is visible to agents by default.",
+          "default": true
+        },
+        "labels": {
+          "type": "object",
+          "description": "Localized display labels.",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "measure": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Measure name.",
+          "pattern": "^[a-z][a-zA-Z0-9]*$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "description": "Aggregation type.",
+          "enum": ["count", "count_distinct", "sum", "avg", "min", "max", "running_total", "count_distinct_approx"]
+        },
+        "property": {
+          "type": "string",
+          "description": "Source property to aggregate. Not required for 'count'."
+        },
+        "expression": {
+          "type": "string",
+          "description": "Custom aggregation expression."
+        },
+        "filters": {
+          "type": "array",
+          "description": "Filters applied before aggregation.",
+          "items": { "$ref": "#/definitions/filter" }
+        },
+        "format": {
+          "type": "string",
+          "description": "Display format hint (e.g., 'currency', 'percent', 'integer').",
+          "enum": ["number", "currency", "percent", "integer", "decimal"]
+        },
+        "labels": {
+          "type": "object",
+          "description": "Localized display labels.",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "metric": {
+      "type": "object",
+      "required": ["name", "expression"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Metric name.",
+          "pattern": "^[a-z][a-zA-Z0-9]*$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "expression": {
+          "type": "string",
+          "description": "Calculation expression referencing measures and dimensions (e.g., 'revenue / orderCount')."
+        },
+        "format": {
+          "type": "string",
+          "enum": ["number", "currency", "percent", "integer", "decimal"]
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "join": {
+      "type": "object",
+      "required": ["name", "entity", "on"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Join alias."
+        },
+        "entity": {
+          "type": "string",
+          "description": "Target entity to join.",
+          "pattern": "^[A-Z][a-zA-Z0-9]*$"
+        },
+        "relationship": {
+          "type": "string",
+          "description": "Join cardinality.",
+          "enum": ["one_to_one", "one_to_many", "many_to_one"],
+          "default": "many_to_one"
+        },
+        "on": {
+          "type": "string",
+          "description": "Join condition expression (e.g., 'appointment.patientId = patient.id')."
+        }
+      }
+    },
+    "segment": {
+      "type": "object",
+      "required": ["name", "filters"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Segment name.",
+          "pattern": "^[a-z][a-zA-Z0-9]*$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "filters": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/filter" },
+          "minItems": 1
+        }
+      }
+    },
+    "filter": {
+      "type": "object",
+      "required": ["property", "operator", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "property": {
+          "type": "string",
+          "description": "Dimension or property to filter on."
+        },
+        "operator": {
+          "type": "string",
+          "enum": ["equals", "not_equals", "gt", "gte", "lt", "lte", "in", "not_in", "contains", "not_contains", "is_set", "is_not_set", "between"]
+        },
+        "value": {
+          "description": "Filter value. Type depends on the operator."
+        }
+      }
+    },
+    "preAggregation": {
+      "type": "object",
+      "required": ["name", "measures", "dimensions"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "measures": {
+          "type": "array",
+          "description": "Measures to include in the pre-aggregation.",
+          "items": { "type": "string" }
+        },
+        "dimensions": {
+          "type": "array",
+          "description": "Dimensions to include.",
+          "items": { "type": "string" }
+        },
+        "timeDimension": {
+          "type": "string",
+          "description": "Time dimension for rollup granularity."
+        },
+        "granularity": {
+          "type": "string",
+          "enum": ["hour", "day", "week", "month", "quarter", "year"]
+        },
+        "refreshInterval": {
+          "type": "string",
+          "description": "How often to refresh (ISO 8601 duration, e.g., 'PT1H')."
+        }
+      }
+    }
+  }
+}

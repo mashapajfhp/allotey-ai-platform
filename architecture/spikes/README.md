@@ -6,6 +6,69 @@ Architecture spikes are **time-boxed investigations** that test hypotheses befor
 
 **No spike automatically becomes a decision.** Each spike that produces actionable findings must result in a separate Architecture Decision Record (ADR). The spike provides evidence; the ADR records the decision.
 
+## Development Model
+
+The research phase has concluded. The architecture is now strong enough to test empirically.
+
+```
+              ┌───────────────┐
+              │ Architecture  │
+              │ Hypothesis    │
+              └───────┬───────┘
+                      ↓
+              ┌───────────────┐
+              │     SPIKE     │
+              └───────┬───────┘
+                      ↓
+          ┌───────────┴────────────┐
+          ↓                        ↓
+      SURVIVES                  FAILS
+          │                        │
+          ↓                        ↓
+      ADR candidate          Change architecture
+          │                        │
+          └────────────┬───────────┘
+                       ↓
+                 Next spike
+```
+
+**From this point forward:**
+- Prefer empirical findings from prototypes over adding new abstractions
+- Every spike should attempt to falsify the architecture hypothesis
+- Every spike should produce evidence suitable for an ADR
+- Do not add broad conceptual layers unless a spike exposes a genuine missing abstraction
+
+## Prioritized Execution Order
+
+Spikes are prioritized to test the **unique IP hypothesis before validating commodity infrastructure**.
+
+### Priority 1 — Core IP Validation (tests Intelligence-as-Code thesis)
+
+| Order | Spike | Tests |
+|-------|-------|-------|
+| 1st | 008: Domain Definition IR Compiler | Can we express fundamentally different domains in a composed IR? |
+| 2nd | 011: Domain Package Four-Domain Validation | Can four architecturally distinct domains operate without core changes? |
+| 3rd | 004: Authorization/Delegation/ScopeContext | Does enterprise governance work across delegation modes and scope levels? |
+| 4th | 012: Package Lifecycle and Versioning | Can Intelligence-as-Code evolve safely? |
+
+### Priority 2 — Infrastructure Validation
+
+| Order | Spike | Tests |
+|-------|-------|-------|
+| 5th | 001: PostgreSQL + AGE + pgvector | Does the infrastructure simplification actually work? |
+| 6th | 005: Agno vs LangGraph | Which agent runtime fits the platform model? |
+| 7th | 003: Cube Adapter | Can semantic models compile from IR to Cube? |
+| 8th | 006: Temporal Integration | How do durable workflows integrate with agent execution? |
+| 9th | 007: MCP Governance Gateway | Can tool access be governed through the platform model? |
+| 10th | 010: Multi-Tenant Isolation | Does tenant isolation hold under realistic load? |
+
+### Deferred (Run If Needed)
+
+| Spike | Condition |
+|-------|-----------|
+| 002: Graphiti + AGE | Run if spike 001 validates AGE |
+| 009: Cross-Source Retrieval | Run when knowledge architecture is validated |
+
 ## When to Create a Spike
 
 - When a technology choice involves significant uncertainty
@@ -20,6 +83,10 @@ Architecture spikes are **time-boxed investigations** that test hypotheses befor
 3. **COMPLETED** — Results documented, recommendation made
 4. **SUPERSEDED** — A newer spike replaces this investigation
 5. **ABANDONED** — Investigation was cancelled (document why)
+
+## Prototype Code
+
+Spike prototype code is stored in `spikes/prototypes/NNN-spike-name/`. Each prototype is self-contained and disposable — spike code is evidence, not product code.
 
 ## Spike Template Structure
 
@@ -85,16 +152,17 @@ What would increase our confidence?
 
 ## Index of Spikes
 
-| # | Spike | Status |
-|---|-------|--------|
-| 001 | [PostgreSQL + AGE + pgvector Unified Data Layer](./001-postgres-age-pgvector.md) | NOT STARTED |
-| 002 | [Graphiti + Apache AGE Compatibility](./002-graphiti-age-compatibility.md) | NOT STARTED |
-| 003 | [Cube Ontology Integration](./003-cube-ontology-integration.md) | NOT STARTED |
-| 004 | [OpenFGA Agent Delegation Model](./004-openfga-agent-delegation.md) | NOT STARTED |
-| 005 | [Agno vs LangGraph Agent Runtime](./005-agno-vs-langgraph.md) | NOT STARTED |
-| 006 | [Temporal + Agent Workflow Integration](./006-temporal-agent-workflow-integration.md) | NOT STARTED |
-| 007 | [MCP Governance Gateway](./007-mcp-governance-gateway.md) | NOT STARTED |
-| 008 | [Ontology IR Compiler](./008-ontology-ir-compiler.md) | NOT STARTED |
-| 009 | [Cross-Source Retrieval Orchestration](./009-cross-source-retrieval.md) | NOT STARTED |
-| 010 | [Multi-Tenant Isolation Testing](./010-multi-tenant-isolation.md) | NOT STARTED |
-| 011 | [Domain Package Validation — Two-Domain Test](./011-domain-package-validation.md) | NOT STARTED |
+| # | Spike | Status | Priority |
+|---|-------|--------|----------|
+| 001 | [PostgreSQL + AGE + pgvector Unified Data Layer](./001-postgres-age-pgvector.md) | NOT STARTED | P2 (5th) |
+| 002 | [Graphiti + Apache AGE Compatibility](./002-graphiti-age-compatibility.md) | NOT STARTED | Deferred |
+| 003 | [Cube Ontology Integration](./003-cube-ontology-integration.md) | NOT STARTED | P2 (7th) |
+| 004 | [OpenFGA Agent Delegation + ScopeContext](./004-openfga-agent-delegation.md) | NOT STARTED | P1 (3rd) |
+| 005 | [Agno vs LangGraph Agent Runtime](./005-agno-vs-langgraph.md) | NOT STARTED | P2 (6th) |
+| 006 | [Temporal + Agent Workflow Integration](./006-temporal-agent-workflow-integration.md) | NOT STARTED | P2 (8th) |
+| 007 | [MCP Governance Gateway](./007-mcp-governance-gateway.md) | NOT STARTED | P2 (9th) |
+| 008 | [Domain Definition IR Compiler](./008-ontology-ir-compiler.md) | NOT STARTED | P1 (1st) |
+| 009 | [Cross-Source Retrieval Orchestration](./009-cross-source-retrieval.md) | NOT STARTED | Deferred |
+| 010 | [Multi-Tenant Isolation Testing](./010-multi-tenant-isolation.md) | NOT STARTED | P2 (10th) |
+| 011 | [Domain Package Validation — Four-Domain Test](./011-domain-package-validation.md) | NOT STARTED | P1 (2nd) |
+| 012 | [Package Lifecycle and Versioning](./012-package-lifecycle-versioning.md) | NOT STARTED | P1 (4th) |
