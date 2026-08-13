@@ -88,7 +88,7 @@ Every recommendation or decision the platform produces must carry provenance:
 
 Distinguish between:
 - **Reasoning workflows**: Agent thought chains, tool selection, multi-step reasoning (ephemeral, restartable)
-- **Durable workflows**: Business processes with long-running state, human approvals, guaranteed completion (persistent, exactly-once)
+- **Durable workflows**: Business processes with long-running state, human approvals, deterministic replay (persistent, at-least-once Activity execution — Activities must be idempotent)
 
 These require different runtime infrastructure. Do not conflate them.
 

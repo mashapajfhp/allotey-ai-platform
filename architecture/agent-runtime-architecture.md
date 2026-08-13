@@ -22,12 +22,12 @@ Handles the LLM interaction loop — prompt assembly, tool selection, multi-step
 
 Handles long-running business processes — approval chains, multi-step operations, scheduled tasks. Characteristics:
 - Durable state — survives crashes, restarts, deployments
-- Exactly-once execution guarantees
+- Deterministic Workflow replay with at-least-once Activity execution (Activities must be idempotent)
 - May run for hours, days, or weeks
 - Supports human wait points
 - Deterministic replay for recovery
 
-**Primary candidates:** Temporal, Inngest, Restate
+**Primary candidate:** Temporal (MIT). Inngest (SSPL) and Restate (BSL 1.1) EXCLUDED on licensing grounds.
 
 ### How They Interact
 

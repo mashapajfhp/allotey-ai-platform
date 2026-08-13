@@ -28,7 +28,7 @@ Each technology is scored 1-5 on key dimensions. Scores must be justified — do
 | Enterprise readiness | 1 | 1 | 2 | 3 | 2 |
 | Multi-tenancy | 1 | 2 | 2 | 2 | 2 |
 | MCP support | 3 | 2 | 3 | 1 | 1 |
-| License friendliness | NEEDS VERIFICATION | NEEDS VERIFICATION | MIT | MPL-2.0 | Apache 2.0 |
+| License friendliness | MIT (verified) | Apache 2.0 (verified) | Apache 2.0 (verified) | MPL-2.0 | Apache 2.0 |
 
 **Key observations:**
 - **Graphiti** has the best temporal knowledge graph model — temporal facts with provenance are architecturally important

@@ -32,7 +32,7 @@
 | **Ontology / Context** | | | | | | | | | | | | |
 | semantica-agi/semantica | NEEDS VERIFICATION | — | — | — | — | — | Yes (research) | VERIFY | VERIFY | VERIFY | UNKNOWN | Read LICENSE file before any use |
 | trustgraph-ai/trustgraph | NEEDS VERIFICATION | — | — | — | — | — | Yes (research) | VERIFY | VERIFY | VERIFY | UNKNOWN | Read LICENSE file before any use |
-| getzep/graphiti | MIT | Yes | Yes | Include license | None | None | Yes | Yes | Yes | Yes | LOW | |
+| getzep/graphiti | Apache 2.0 | Yes | Yes | Include license + NOTICE | None | None | Yes | Yes | Yes | Yes | LOW | Previously recorded as MIT; verified Apache-2.0 from pyproject.toml |
 | typedb/typedb | MPL-2.0 | Yes | Yes | Modified MPL files shared | None | File-level | Yes | Caution | Caution | Caution | MEDIUM | Server is MPL-2.0 |
 | terminusdb/terminusdb | Apache 2.0 | Yes | Yes | Include license | None | None | Yes | Yes | Yes | Yes | LOW | |
 | **Model Gateway** | | | | | | | | | | | | |
@@ -68,15 +68,19 @@
 
 ## Critical License Warnings
 
+> **This is architecture guidance, not legal advice.** See `licensing-risks.md` for methodology and caveats. Where interpretation depends on deployment model or integration method, this matrix flags risk level but does not state definitive legal conclusions.
+
 ### AGPL-3.0 (Xpert)
-- **Network use triggers source disclosure** — if you modify Xpert and serve it over a network, you must release ALL source code of the combined work
+- **Network use may trigger source disclosure obligations** — the scope of "combined work" and "modification" under AGPL are nuanced legal questions
+- **Architecture guidance:** DO NOT ADOPT WITHOUT LEGAL APPROVAL
 - **Safe for:** Architecture study, concept research
-- **NOT safe for:** Using as a dependency, copying code, modifying and deploying
+- **Not safe for:** Using as a dependency, copying code, modifying and deploying
 
 ### Custom Licenses (Dify)
 - Dify uses a custom license that restricts certain commercial uses
 - **Must read the actual license text** before any use beyond research
 - Do not assume OSS-like freedoms
+- **Architecture guidance:** DO NOT ADOPT WITHOUT LEGAL APPROVAL
 
 ### MPL-2.0 (TypeDB)
 - File-level copyleft — modified MPL files must remain MPL-2.0
@@ -85,12 +89,26 @@
 - **Caution for:** Modifying existing MPL files (those must stay MPL-2.0)
 - Note: Agno was previously MPL-2.0 but changed to Apache 2.0 in January 2025
 
-### SSPL (Inngest)
-- **Server Side Public License** — similar to AGPL but stricter: if you offer Inngest as part of a managed service, you must open-source the entire service stack
+### SSPL (Inngest, FalkorDB)
+- **Server Side Public License** — more restrictive than AGPL. The SSPL's requirement to open-source the "Service Source Code" when offering the software as a service has limited legal precedent and debated scope.
+- **Architecture guidance:** DO NOT ADOPT WITHOUT LEGAL APPROVAL. EXCLUDED from candidate architecture.
 - **Safe for:** Self-hosted internal use, architecture research
-- **Caution for:** Using in a product that could be characterized as offering Inngest as a service
-- This is a significant concern if the platform is ever offered as SaaS
+- **Not safe for:** Any product that could be characterized as offering the software as a service
+
+### BSL 1.1 (Restate)
+- **Business Source License** — NOT OSI-approved open source. Restricts commercial use until conversion date.
+- **Architecture guidance:** EXCLUDED. Temporal (MIT) is the recommended alternative.
+
+### GPLv3 (Neo4j Community)
+- **Strong copyleft** — whether using Neo4j as a backend constitutes creating a "derivative work" is a nuanced legal question.
+- **Architecture guidance:** DO NOT ADOPT WITHOUT LEGAL APPROVAL. Apache AGE (Apache 2.0) is the recommended alternative. EXCLUDED from candidate architecture.
 
 ### Dual-Licensed Projects
 - Several projects (LiteLLM, Langfuse, ClickHouse) have open-source cores with enterprise features under separate terms
 - **Always verify** which features are covered by the OSS license vs. enterprise license
+- Document the feature boundary before adoption
+
+### Model Licenses (Separate from Library Licenses)
+- ML library licenses (Apache 2.0, BSD) do NOT govern the models accessed through them
+- Every model adopted needs its own license review
+- See `licensing-risks.md` for model licensing categories

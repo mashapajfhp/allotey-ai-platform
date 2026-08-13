@@ -196,8 +196,8 @@ This document defines the platform's capability taxonomy — the complete set of
 **Why it exists:** Intelligence requires fast analytical computation. Agents generating SQL need a performant execution engine. Dashboards and real-time analytics need sub-second response.
 
 **Commercial reference:** Snowflake (analytical compute), Databricks (Spark SQL, Photon)
-**Open-source reference:** ClickHouse (event/time-series), DuckDB (embedded analytics), Apache Pinot (real-time)
-**Build/adopt/wrap:** Adopt — use ClickHouse for event/analytical workloads, DuckDB for embedded/edge analytics
+**Open-source reference:** ClickHouse (event/time-series analytics), DuckDB (embedded analytical querying), Apache Pinot (real-time)
+**Build/adopt/wrap:** Adopt — DuckDB for embedded analytical query execution (NOT as event store); ClickHouse for event analytics at scale and observability (required by Langfuse)
 **Maturity:** ClickHouse is production-ready at scale
 **Dependencies:** Semantic Metrics Layer
 
@@ -210,8 +210,8 @@ This document defines the platform's capability taxonomy — the complete set of
 **Why it exists:** Many intelligence use cases require understanding sequences of events — what happened, in what order, and what patterns emerge. Events are the raw material for decision intelligence.
 
 **Commercial reference:** Palantir (operational event streams), Databricks (Delta Lake streaming)
-**Open-source reference:** ClickHouse (event storage), Kafka/Redpanda (event streaming)
-**Build/adopt/wrap:** Adopt event storage (ClickHouse); Build event reasoning capabilities
+**Open-source reference:** PostgreSQL (append-only event records V1), ClickHouse (event analytics at scale), Kafka/Redpanda (event streaming)
+**Build/adopt/wrap:** V1: PostgreSQL append-only events + DuckDB analytical queries. Scale: ClickHouse for high-volume event analytics. Build event reasoning capabilities.
 **Maturity:** Event infrastructure is mature; event intelligence is custom
 **Dependencies:** Analytical Engine, Context Graph
 
@@ -261,13 +261,13 @@ This document defines the platform's capability taxonomy — the complete set of
 
 ## 19. Durable Workflow Engine
 
-**What it does:** Executes long-running business processes with guaranteed completion — durable timers, retries, compensation, human waits, exactly-once semantics. Distinct from agent reasoning workflows.
+**What it does:** Executes long-running business processes with guaranteed completion — durable timers, retries, compensation, human waits, deterministic replay, and persisted workflow state. Activities execute at-least-once and must be designed for idempotency. Distinct from agent reasoning workflows.
 
 **Why it exists:** Business processes (approval chains, data pipelines, multi-step operations) can take hours, days, or weeks. They must survive failures and restarts. Agent reasoning is ephemeral; business workflows are durable.
 
 **Commercial reference:** Palantir (operational workflows), Salesforce (Flow)
-**Open-source reference:** Temporal (primary reference), Inngest, Restate
-**Build/adopt/wrap:** Adopt Temporal (or evaluate Inngest/Restate for simpler use cases)
+**Open-source reference:** Temporal (primary reference). Inngest (SSPL — EXCLUDED) and Restate (BSL — EXCLUDED) are not viable for SaaS.
+**Build/adopt/wrap:** Adopt Temporal — operationally complex but architecturally sound and MIT-licensed
 **Maturity:** Temporal is production-ready at scale
 **Dependencies:** Human Approval, Action Engine
 
@@ -295,8 +295,8 @@ This document defines the platform's capability taxonomy — the complete set of
 
 **Commercial reference:** Databricks (Unity Catalog), Palantir (data lineage), Snowflake (governance)
 **Open-source reference:** DataHub (primary reference), OpenMetadata
-**Build/adopt/wrap:** Wrap DataHub — adopt its metadata graph; integrate with platform ontology
-**Maturity:** DataHub is production-ready
+**Build/adopt/wrap:** DEFERRED to V2 — DataHub is too operationally heavy for V1 (requires Kafka, Elasticsearch, Neo4j, MySQL, Zookeeper). V1: build lightweight metadata tracking within the platform. V2: evaluate DataHub or OpenMetadata.
+**Maturity:** DataHub is production-ready but operationally demanding
 **Dependencies:** Domain Ontology, Identity & Authorization
 
 ---
@@ -371,18 +371,102 @@ This document defines the platform's capability taxonomy — the complete set of
 
 ---
 
+## 27. ML Platform / Model Development
+
+**What it does:** Supports the full lifecycle of custom and specialist model development — dataset management, feature engineering, training, fine-tuning, experiment tracking, model evaluation, model registry, artifact management, model serving, and model monitoring.
+
+**Why it exists:** The current architecture covers model **consumption** (via the Model Gateway / LiteLLM) but not model **development**. An AI platform that can only call external APIs is not a comprehensive AI platform. Custom models for domain-specific tasks, fine-tuned foundation models, and specialist classifiers all require development infrastructure.
+
+**Commercial reference:** Databricks (MLflow, Mosaic AI), AWS (SageMaker), Google (Vertex AI), Microsoft (Azure ML)
+**Open-source reference:** PyTorch (BSD), fastai (Apache 2.0), Hugging Face Transformers (Apache 2.0), MLflow (Apache 2.0), Ray (Apache 2.0), vLLM (Apache 2.0), BentoML (Apache 2.0), KServe (Apache 2.0)
+**Build/adopt/wrap:** ADOPT ML tooling (all permissively licensed) + BUILD platform integration
+**Maturity:** Individual tools are production-ready; integrated ML platforms are complex
+**Dependencies:** Model Gateway, Observability, Cost/Metering
+**IMPORTANT:** Library licenses are separate from model licenses. Every model needs individual licensing review.
+
+---
+
+## 28. Data / Context Ingestion
+
+**What it does:** Ingests data from diverse sources into the platform — databases, APIs, CDC streams, webhooks, files, documents, object storage, SaaS connectors, IoT feeds. Handles schema discovery, schema evolution, mapping, normalization, lineage, quality assessment, deduplication, identity resolution, incremental sync, and backfill.
+
+**Why it exists:** An intelligence platform cannot only define what happens after data arrives. Ingestion is where the data foundation is built. No architecture like Palantir or Databricks becomes useful without excellent ingestion capabilities.
+
+**Commercial reference:** Palantir (Foundry data connections), Databricks (Delta Live Tables, Auto Loader), Snowflake (Snowpipe)
+**Open-source reference:** Airbyte (verify license — MIT/ELv2), Debezium (Apache 2.0), dlt (Apache 2.0), Meltano (MIT), Kafka Connect (Apache 2.0), Dagster (Apache 2.0), Apache NiFi (Apache 2.0)
+**Build/adopt/wrap:** ADOPT ingestion framework + BUILD platform-specific integration
+**Maturity:** Batch ingestion is mature; real-time CDC and schema evolution are more complex
+**Dependencies:** Domain Ontology (schema mapping), Metadata/Governance (lineage), Knowledge Engine (document ingestion)
+
+---
+
+## 29. Secure Agent Compute / Sandboxing
+
+**What it does:** Provides isolated execution environments for agent-generated code — Python scripts, SQL queries, data transformations, chart generation, document processing, browser automation. Enforces network isolation, filesystem isolation, CPU/memory limits, execution timeouts, and tenant isolation.
+
+**Why it exists:** Agents eventually need to execute code. This CANNOT happen inside an unrestricted application process. Generated code may be malicious, buggy, or resource-intensive. Sandboxing is a security-critical capability.
+
+**Commercial reference:** Databricks (notebooks with cluster isolation), Palantir (Code Sandbox), AWS (Lambda isolation)
+**Open-source reference:** Firecracker (Apache 2.0), gVisor (Apache 2.0), WASM/WASI, E2B (verify license)
+**Build/adopt/wrap:** ADOPT isolation technology + BUILD agent-specific sandbox orchestration
+**Maturity:** Sandbox technologies are mature; agent-specific sandboxing is an emerging pattern
+**Dependencies:** Identity & Authorization, Agent Runtime
+**Threat model:** Agents must never execute arbitrary generated code inside the core platform process.
+
+---
+
+## 30. Secrets / Credential Broker
+
+**What it does:** Manages secrets (API keys, database credentials, OAuth tokens, encryption keys) and provides short-lived, scoped credentials to agents and tools. Ensures long-lived credentials are never exposed directly to LLMs or agent code.
+
+**Why it exists:** Agents call external systems that require authentication. If agents have direct access to long-lived credentials, a compromised agent or prompt injection attack could exfiltrate secrets. A credential broker issues time-limited, scope-limited credentials that minimize blast radius.
+
+**Architecture:** Agent → Authorized Tool Request → Credential Broker → Short-lived scoped credential → External System
+
+**Commercial reference:** HashiCorp Vault, AWS Secrets Manager, Azure Key Vault
+**Open-source reference:** OpenBao (MPL-2.0 — Vault fork), SPIFFE/SPIRE (Apache 2.0)
+**Build/adopt/wrap:** ADOPT secrets engine + BUILD credential broker with agent integration
+**Maturity:** Secrets management is mature; agent-specific credential brokering is emerging
+**Dependencies:** Identity & Authorization, Agent Runtime, Tool Registry
+
+---
+
+## 31. Policy Evaluation
+
+**What it does:** Evaluates attribute-based and rule-based policies that go beyond relationship-based authorization. Handles conditions like "amount > $10,000 AND country = AE AND risk_score > 70 → require second approval" that are not relationship queries.
+
+**Why it exists:** OpenFGA solves relationship-based authorization (who can access what). But not every governance decision is a relationship. Business rules, conditional approval logic, compliance checks, and rate-based policies require a separate policy evaluation engine.
+
+**Three-layer authorization model:**
+1. **Identity** — authentication (who is this?)
+2. **Relationship Authorization (OpenFGA)** — who can access what, based on relationships
+3. **Policy Evaluation (OPA/Cedar)** — attribute-based rules, conditional logic, compliance checks
+4. **Domain Constraints (Ontology)** — business rules embedded in the domain model
+
+**Commercial reference:** AWS (Cedar), Google (Policy Engine)
+**Open-source reference:** OPA (Apache 2.0), Cedar (Apache 2.0)
+**Build/adopt/wrap:** ADOPT OPA or Cedar + BUILD integration with ontology rules
+**Maturity:** OPA is production-proven at scale; Cedar is newer but well-designed
+**Dependencies:** Identity & Authorization, Domain Ontology
+
+---
+
 ## Capability Dependencies Map
 
 ```
 Experience Layer
     └── AI Gateway
             ├── Identity & Authorization (foundational)
+            │       └── Policy Evaluation (OPA/Cedar)
+            ├── Secrets / Credential Broker
             ├── Model Gateway
-            │       └── Cost/Metering
+            │       ├── Cost/Metering
+            │       └── ML Platform (model development)
             ├── Agent Runtime
             │       ├── Tool Registry
             │       │       └── MCP/A2A Gateway
             │       ├── Agent Registry
+            │       ├── Secure Compute / Sandboxing
             │       ├── Memory
             │       │       └── Context Graph
             │       └── Human Approval
@@ -390,9 +474,12 @@ Experience Layer
             ├── Domain Ontology
             │       ├── Semantic Metrics Layer
             │       │       └── Analytical Engine
-            │       └── Context Graph
-            │               └── Knowledge Engine
-            │                       └── Retrieval Engine
+            │       ├── Context Graph
+            │       │       └── Knowledge Engine
+            │       │               └── Retrieval Engine
+            │       └── Policy Evaluation (ontology rules)
+            ├── Data / Context Ingestion
+            │       └── Domain Ontology (schema mapping)
             ├── Action Engine
             │       └── Tool Registry
             ├── Decision Intelligence
@@ -402,3 +489,5 @@ Experience Layer
 
 Cross-cutting: Observability, Evaluation, Security, Provenance
 ```
+
+**NOTE:** This capability model now includes 31 capabilities (up from 26). The additions (ML Platform, Data Ingestion, Secure Compute, Secrets Management, Policy Evaluation) were identified during the architecture correction pass as significant gaps.

@@ -45,6 +45,10 @@ This document defines the vendor-neutral reference architecture for the enterpri
 │  │ MCP Gateway      │ │ A2A Gateway         │                      │
 │  │ (agent↔tools)    │ │ (agent↔agent)       │                      │
 │  └──────────────────┘ └─────────────────────┘                      │
+│  ┌──────────────────┐ ┌─────────────────────┐                      │
+│  │ Secure Compute   │ │ Credential Broker   │                      │
+│  │ (sandboxing)     │ │ (secrets)           │                      │
+│  └──────────────────┘ └─────────────────────┘                      │
 └───────────────────────────────┬─────────────────────────────────────┘
                                 │
                                 ▼
@@ -62,6 +66,10 @@ This document defines the vendor-neutral reference architecture for the enterpri
 │  ┌──────────────┐ ┌───────────────┐ ┌──────────────┐              │
 │  │ Decision     │ │ Policies &    │ │ Model        │              │
 │  │ Intelligence │ │ Constraints   │ │ Gateway      │              │
+│  └──────────────┘ └───────────────┘ └──────────────┘              │
+│  ┌──────────────┐ ┌───────────────┐ ┌──────────────┐              │
+│  │ Data / Ctx   │ │ ML Platform   │ │ Policy       │              │
+│  │ Ingestion    │ │ (model dev)   │ │ Evaluation   │              │
 │  └──────────────┘ └───────────────┘ └──────────────┘              │
 └───────────────────────────────┬─────────────────────────────────────┘
                                 │
@@ -142,12 +150,13 @@ Where reasoning and execution happen.
    - Context assembly
    - Response generation
 
-2. **Durable Workflow Runtime** — persistent, exactly-once
+2. **Durable Workflow Runtime** — persistent, deterministic replay
    - Long-running business processes
-   - Human approval waits
+   - Human approval waits (via signals)
    - Scheduled operations
-   - Retry logic with compensation
+   - Retry logic with compensation (Activities are at-least-once; must be idempotent)
    - State that survives system restarts
+   - Persisted workflow state with deterministic replay
 
 These are **not the same thing**. Agent reasoning may be part of a durable workflow step, but the workflow engine outlives the agent's reasoning loop.
 

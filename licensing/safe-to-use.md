@@ -10,7 +10,6 @@ These repositories can be used as dependencies, modified, and distributed with m
 ### MIT Licensed
 - langchain-ai/langgraph
 - microsoft/agent-framework
-- getzep/graphiti
 - BerriAI/litellm (core)
 - langfuse/langfuse (core)
 - temporalio/temporal
@@ -19,6 +18,7 @@ These repositories can be used as dependencies, modified, and distributed with m
 ### Apache 2.0 Licensed
 - google/adk-python, google/adk-js
 - strands-agents/sdk-python, sdk-typescript
+- getzep/graphiti
 - cube-js/cube (core)
 - rilldata/rill
 - lancedb/lancedb

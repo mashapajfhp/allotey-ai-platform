@@ -2,10 +2,10 @@
 
 **Category:** Ontology / Context
 **Repository:** https://github.com/getzep/graphiti
-**License:** Apache 2.0 (with Contributor License Agreement)
+**License:** Apache 2.0 (verified from pyproject.toml; previously incorrectly recorded as MIT in some files)
 **Language:** Python
 **Stars:** 20,000+
-**Status:** RESEARCH COMPLETE
+**Status:** DEEP REVIEW COMPLETE
 **Last Verified:** 2026-08-13
 
 ---
@@ -85,11 +85,18 @@ This dual approach means you can start unstructured and progressively add schema
 
 ## Storage Backends
 
-**Supported Graph Databases:**
-- Neo4j 5.26+ (primary, most documented)
-- FalkorDB 1.1.2+
+**Supported Graph Databases (officially):**
+- Neo4j 5.26+ (primary, most documented) — **GPLv3 license**
+- FalkorDB 1.1.2+ — **SSPL license**
 - Kuzu 0.11.2 (deprecated)
-- Amazon Neptune Database with OpenSearch Serverless
+- Amazon Neptune Database with OpenSearch Serverless — **managed service, not self-hostable**
+
+**NOT supported:** Apache AGE. Using Graphiti with AGE would require building a custom driver (query translation, index creation, search adaptation, temporal queries, migrations, namespace support). This is a significant EXTEND/BUILD effort, not an ADOPT decision.
+
+**License implications for graph backends:**
+- Neo4j Community (GPLv3) and FalkorDB (SSPL) both have copyleft/restrictive licenses
+- Neptune is a managed AWS service (commercial dependency)
+- If self-hosted open-source is required, the only path is: build AGE driver OR build temporal graph concepts independently on AGE
 
 **LLM Support:**
 - OpenAI (default)
