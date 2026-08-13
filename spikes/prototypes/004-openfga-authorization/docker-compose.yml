@@ -1,0 +1,17 @@
+services:
+  openfga:
+    image: openfga/openfga:latest
+    container_name: openfga-spike-004
+    command: run
+    environment:
+      - OPENFGA_DATASTORE_ENGINE=memory
+      - OPENFGA_PLAYGROUND_ENABLED=true
+    ports:
+      - "18080:8080"  # HTTP API
+      - "18081:8081"  # gRPC
+      - "13000:3000"  # Playground UI
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

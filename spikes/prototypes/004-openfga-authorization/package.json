@@ -1,0 +1,16 @@
+{
+  "name": "004-openfga-authorization",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Spike 004: Prove OpenFGA can correctly model deny-by-default healthcare authorization with agent delegation",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:health": "curl -sf http://localhost:18080/healthz || echo 'OpenFGA not ready'"
+  },
+  "dependencies": {
+    "@openfga/sdk": "^0.7.0"
+  }
+}
