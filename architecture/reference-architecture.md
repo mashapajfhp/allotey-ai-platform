@@ -3,11 +3,58 @@
 > STATUS: INITIAL REVIEW COMPLETE
 > Last updated: 2026-08-13
 
-This document defines the vendor-neutral reference architecture for the enterprise AI / operational intelligence platform. Technology choices are not committed here — this is the structural blueprint.
+This document defines the vendor-neutral reference architecture for the enterprise AI platform. Technology choices are not committed here — this is the structural blueprint.
+
+**Foundational constraint:** The platform is product-agnostic. The core must not contain assumptions about any specific application domain, workflow, entity type, industry, or product. Domain-specific concepts enter only through explicit extension mechanisms. See `AGENTS.md` rules 6 and 7.
 
 ---
 
-## Architecture Overview
+## Conceptual Architecture — Platform vs. Domain
+
+The fundamental architectural split: the platform is generic; intelligence enters through packages.
+
+```
+┌─────────────────────────────────────────────────┐
+│              PRODUCT / DOMAIN LAYER             │
+│                                                 │
+│ Ontologies   Semantics   Agents   Tools         │
+│ Policies     Workflows   Connectors             │
+└────────────────────┬────────────────────────────┘
+                     │
+               Stable Platform API
+                     │
+┌────────────────────▼────────────────────────────┐
+│            ENTERPRISE AI PLATFORM               │
+│                                                 │
+│ Intelligence Gateway                            │
+│ Model Gateway                                   │
+│ Agent Runtime                                   │
+│ Tool / MCP Gateway                              │
+│ Ontology Runtime / Compiler                     │
+│ Context / Knowledge                             │
+│ Decision & Action Governance                    │
+│ Authorization / Policy                          │
+│ Workflow Runtime                                │
+│ Evaluation / Observability                      │
+│ Provenance / Audit                              │
+│ Cost / Metering                                 │
+│ Secure Compute                                  │
+│ Developer Platform                              │
+└────────────────────┬────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────┐
+│          INFRASTRUCTURE / DATA                  │
+│ Databases │ Graph │ Vector │ Events │ ML        │
+└─────────────────────────────────────────────────┘
+```
+
+**The platform stays generic; intelligence enters through packages.** A Domain Package contains all domain-specific artifacts — ontology definitions, semantic models, agents, tools, workflows, policies, connectors, evaluations, prompts, and migrations. See `architecture/domain-package-architecture.md`.
+
+**Validation test:** Build two deliberately unrelated synthetic domains during the architecture-spike phase. If both can be modeled without changing `/core`, the abstraction is healthy. If core code starts filling with domain conditionals, the boundary is wrong.
+
+---
+
+## Architecture Overview (Detailed)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -306,16 +353,18 @@ Outcome Tracking: record decision → action → outcome for future learning
 
 ## Design Principles
 
-1. **Gateway-mediated access** — no component bypasses the intelligence gateway
-2. **Ontology-first operations** — agents operate on domain abstractions, not raw data
-3. **Identity delegation** — agent permissions are bounded by user permissions
-4. **Temporal awareness** — the system knows not just what is true, but what was true and when things changed
-5. **Provenance by default** — every output carries its evidence chain
-6. **Separation of reasoning and durability** — ephemeral agent thinking vs. persistent business workflows
-7. **Metrics consistency** — one definition of each metric, everywhere
-8. **Model independence** — any LLM can be swapped without architectural change
-9. **Protocol-first integration** — MCP for tool access, A2A for agent communication
-10. **Least privilege** — every component operates with minimum necessary permissions
+1. **Product agnosticism** — the core platform contains zero domain-specific logic; all domain knowledge enters through extension mechanisms (domain packages, ontology definitions, semantic models, tools, policies, agents, workflows, connectors)
+2. **Gateway-mediated access** — no component bypasses the intelligence gateway
+3. **Ontology-first operations** — agents operate on domain abstractions, not raw data
+4. **Identity delegation** — agent permissions are bounded by user permissions
+5. **Temporal awareness** — the system knows not just what is true, but what was true and when things changed
+6. **Provenance by default** — every output carries its evidence chain
+7. **Separation of reasoning and durability** — ephemeral agent thinking vs. persistent business workflows
+8. **Metrics consistency** — one definition of each metric, everywhere
+9. **Model independence** — any LLM can be swapped without architectural change
+10. **Protocol-first integration** — MCP for tool access, A2A for agent communication
+11. **Least privilege** — every component operates with minimum necessary permissions
+12. **Enterprise-grade abstractions, simple implementation** — predictable contracts, isolation, governance, security, lifecycle management, observability from the beginning; microservices only when justified
 
 ---
 

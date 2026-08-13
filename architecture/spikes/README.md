@@ -97,3 +97,4 @@ What would increase our confidence?
 | 008 | [Ontology IR Compiler](./008-ontology-ir-compiler.md) | NOT STARTED |
 | 009 | [Cross-Source Retrieval Orchestration](./009-cross-source-retrieval.md) | NOT STARTED |
 | 010 | [Multi-Tenant Isolation Testing](./010-multi-tenant-isolation.md) | NOT STARTED |
+| 011 | [Domain Package Validation — Two-Domain Test](./011-domain-package-validation.md) | NOT STARTED |

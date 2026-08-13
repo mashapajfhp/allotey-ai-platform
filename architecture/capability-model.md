@@ -451,6 +451,28 @@ This document defines the platform's capability taxonomy — the complete set of
 
 ---
 
+## 32. Domain Package System
+
+**What it does:** Provides the packaging, validation, registration, activation, versioning, and lifecycle management for domain-specific intelligence packages. A domain package contains all domain-specific artifacts — ontology definitions, semantic models, agents, tools, workflows, policies, connectors, evaluations, prompts, and migrations.
+
+**Why it exists:** The platform is product-agnostic. The core must not contain assumptions about any specific domain. The domain package system is the mechanism by which domain intelligence enters the platform without contaminating core infrastructure.
+
+**Key abstractions:**
+- **Package manifest** — metadata, version, dependencies, compatibility
+- **Package registry** — catalog of available packages
+- **Package lifecycle** — AUTHOR → VALIDATE → REGISTER → ACTIVATE → MONITOR → VERSION → DEPRECATE
+- **Package isolation** — different products/tenants use different packages without leakage
+
+**Commercial reference:** Palantir (Ontology + Marketplace), Salesforce (AppExchange / managed packages), Databricks (Unity Catalog asset bundles)
+**Open-source reference:** No direct equivalent — this is core IP
+**Build/adopt/wrap:** BUILD — this is the primary extension mechanism and a key differentiator
+**Maturity:** Emerging pattern — no established open-source standard for AI domain packaging
+**Dependencies:** Ontology Runtime, Agent Runtime, Tool Registry, Semantic Metrics Layer, Authorization, Workflow Runtime
+**Architecture:** See `architecture/domain-package-architecture.md`
+**Validation:** See `architecture/spikes/011-domain-package-validation.md`
+
+---
+
 ## Capability Dependencies Map
 
 ```
@@ -478,6 +500,12 @@ Experience Layer
             │       │       └── Knowledge Engine
             │       │               └── Retrieval Engine
             │       └── Policy Evaluation (ontology rules)
+            ├── Domain Package System
+            │       ├── Domain Ontology (package content)
+            │       ├── Agent Registry (package content)
+            │       ├── Tool Registry (package content)
+            │       ├── Semantic Metrics Layer (package content)
+            │       └── Durable Workflow Engine (package content)
             ├── Data / Context Ingestion
             │       └── Domain Ontology (schema mapping)
             ├── Action Engine
@@ -490,4 +518,4 @@ Experience Layer
 Cross-cutting: Observability, Evaluation, Security, Provenance
 ```
 
-**NOTE:** This capability model now includes 31 capabilities (up from 26). The additions (ML Platform, Data Ingestion, Secure Compute, Secrets Management, Policy Evaluation) were identified during the architecture correction pass as significant gaps.
+**NOTE:** This capability model includes 32 capabilities. The Domain Package System (32) is the core extension mechanism that enforces product agnosticism — all domain intelligence enters the platform through packages, never through core modifications.

@@ -13,9 +13,11 @@
 | `NEEDS VERIFICATION` | Findings need freshness check or cross-reference |
 | `EXCLUDED` | Evaluated and excluded from adoption (license or maturity) |
 
-## Core Constraint
+## Core Constraints
 
-**Prefer permissively licensed, self-hostable components where they satisfy architecture, security, reliability, and total-cost-of-ownership requirements. Paid dependencies require explicit justification.** All adopted components should carry MIT or Apache 2.0 licenses where possible. MPL-2.0 acceptable with discipline. SSPL, AGPL, BSL, and custom licenses excluded from adoption (study only). For every major component, evaluate total cost of ownership (license + infrastructure + engineering + operations + HA + backup + security maintenance), not license cost alone.
+**Product agnosticism:** The core platform must not contain assumptions about any specific application domain, workflow, entity type, industry, or product. Domain-specific concepts enter only through explicit extension mechanisms (domain packages, ontology definitions, semantic models, tools, policies, agents, workflows, connectors). The platform stays generic; intelligence enters through packages. See `AGENTS.md` rules 6-7 and `architecture/domain-package-architecture.md`.
+
+**Licensing and TCO:** Prefer permissively licensed, self-hostable components where they satisfy architecture, security, reliability, and total-cost-of-ownership requirements. Paid dependencies require explicit justification. All adopted components should carry MIT or Apache 2.0 licenses where possible. MPL-2.0 acceptable with discipline. SSPL, AGPL, BSL, and custom licenses excluded from adoption (study only). For every major component, evaluate total cost of ownership (license + infrastructure + engineering + operations + HA + backup + security maintenance), not license cost alone.
 
 ## Technology Selection Lifecycle
 
@@ -238,7 +240,8 @@ A technology cannot become SELECTED until it passes all stages:
 | Open-Source Matrix | `IN RESEARCH` | 2026-08-13 | Contradictions being resolved |
 | Licensing Matrix | `IN RESEARCH` | 2026-08-13 | Methodology corrected, legal precision improved |
 | Build vs Adopt Analysis | `IN RESEARCH` | 2026-08-13 | Downgraded from DEEP REVIEW — decisions are CANDIDATE not SELECTED |
-| Architecture Spikes | `NOT STARTED` | 2026-08-13 | NEW: 10 validation spikes defined |
+| Domain Package Architecture | `IN RESEARCH` | 2026-08-13 | NEW: Product agnosticism, package structure, two-domain validation test |
+| Architecture Spikes | `NOT STARTED` | 2026-08-13 | 11 validation spikes defined (added 011: domain package validation) |
 | ADR Process | `INITIAL REVIEW COMPLETE` | 2026-08-13 |
 
 ## Open-Source — ML/AI Infrastructure
