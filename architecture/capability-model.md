@@ -35,17 +35,21 @@ This document defines the platform's capability taxonomy — the complete set of
 
 ---
 
-## 3. Identity & Authorization
+## 3. Authorization (ReBAC)
 
-**What it does:** Authenticates users, authenticates agents, enforces permissions at every layer (data, tool, action, agent), supports delegated authorization (user → agent → tool), enforces tenant isolation.
+**What it does:** Enforces relationship-based permissions at every layer (data, tool, action, agent), supports delegated authorization (user → agent → tool), enforces tenant and product isolation.
 
 **Why it exists:** AI agents act on behalf of users. The system must ensure that an agent never exceeds the permissions of the user it represents, and that agents themselves have bounded capabilities.
 
+**Distinct from Identity & Federation (capability 33):** Authorization answers "Is X allowed to do Y on Z?" It does NOT answer "Who is X?" or "How did X authenticate?" Those are identity concerns.
+
+**Distinct from Policy Evaluation (capability 31):** Authorization handles relationship queries (is user a member of team that owns resource?). Policy evaluation handles attribute-based and conditional rules (is amount > $10K AND country = AE?).
+
 **Commercial reference:** Palantir (Ontology security, marking categories), Microsoft (On-Behalf-Of delegation), Databricks (Unity Catalog ACLs)
-**Open-source reference:** OpenFGA (ReBAC/Zanzibar), SpiceDB, OPA
-**Build/adopt/wrap:** Adopt OpenFGA or SpiceDB for relationship-based authorization; Build the agent delegation layer
+**Open-source reference:** OpenFGA (ReBAC/Zanzibar), SpiceDB
+**Build/adopt/wrap:** Leading candidate: OpenFGA or SpiceDB for relationship-based authorization; Build the agent delegation layer
 **Maturity:** OpenFGA is production-ready; AI agent authorization patterns are emerging
-**Dependencies:** None (foundational)
+**Dependencies:** Identity & Federation (capability 33)
 
 ---
 
@@ -383,6 +387,7 @@ This document defines the platform's capability taxonomy — the complete set of
 **Maturity:** Individual tools are production-ready; integrated ML platforms are complex
 **Dependencies:** Model Gateway, Observability, Cost/Metering
 **IMPORTANT:** Library licenses are separate from model licenses. Every model needs individual licensing review.
+**V1 SEQUENCING:** Architect for ML platform capability now; do not build a full ML platform first. V1 should define a Model Provider Interface (foundation model OR custom hosted model OR specialist ML endpoint → common model contract). Deeper ML lifecycle can mature independently. Avoid unintentionally recreating a Databricks-style ML platform before the common model contract is validated.
 
 ---
 
@@ -473,49 +478,95 @@ This document defines the platform's capability taxonomy — the complete set of
 
 ---
 
+## 33. Identity & Federation
+
+**What it does:** Authenticates users, service accounts, agents, and workloads. Manages identity lifecycle, enterprise federation (connecting to customer identity providers), directory synchronization, session management, and token architecture.
+
+**Why it exists:** The platform needs to know WHO is making a request before it can decide WHAT they are allowed to do. OpenFGA answers authorization questions but does not authenticate identities. This is a foundational capability that authorization and policy depend on.
+
+**Distinct from Authorization (capability 3):** Identity answers "Who is this?" and "How did they authenticate?" Authorization answers "Is this identity allowed to do this?"
+
+**Distinct from Policy (capability 31):** Identity provides the identity context (user attributes, group memberships, authentication strength). Policy evaluates conditions using that context.
+
+**Key concerns:**
+- Authentication protocols: OIDC, OAuth 2.x, SAML 2.0
+- Directory and provisioning: SCIM, directory sync, JIT provisioning
+- Identity types: User, Service Account, Agent, Workload (SPIFFE/SPIRE)
+- MFA and step-up authentication
+- Enterprise federation (connecting to customer IdPs)
+- Session management and session policy
+- Token architecture (access tokens, refresh tokens, ID tokens, agent delegation tokens)
+- Agent identity: agents inherit user identity via delegation AND have their own identity for audit
+
+**Commercial reference:** Azure AD / Entra ID, AWS IAM, Google IAP
+**Open-source reference:** Keycloak (Apache 2.0), Ory (Apache 2.0), ZITADEL (Apache 2.0), Authentik (verify license)
+**Build/adopt/wrap:** ADOPT identity platform + BUILD agent identity delegation layer
+**Maturity:** Enterprise IAM is well-established; AI agent identity is emerging
+**Dependencies:** None (foundational — everything else depends on this)
+**Architecture:** See `architecture/identity-federation-architecture.md`
+
+---
+
 ## Capability Dependencies Map
 
 ```
 Experience Layer
-    └── AI Gateway
-            ├── Identity & Authorization (foundational)
-            │       └── Policy Evaluation (OPA/Cedar)
-            ├── Secrets / Credential Broker
+    └── AI / Intelligence Gateway (intelligence operations only)
+            │
+            ├── Identity & Federation (foundational — Who is this?)
+            │       ├── Authorization / ReBAC (Is X allowed to do Y on Z?)
+            │       │       └── Policy Evaluation (attribute/rule-based conditions)
+            │       └── Secrets / Credential Broker
+            │
             ├── Model Gateway
             │       ├── Cost/Metering
-            │       └── ML Platform (model development)
+            │       └── ML Platform (model development — architect now, build incrementally)
+            │
             ├── Agent Runtime
             │       ├── Tool Registry
-            │       │       └── MCP/A2A Gateway
+            │       │       └── Tool Protocol Gateway
             │       ├── Agent Registry
             │       ├── Secure Compute / Sandboxing
             │       ├── Memory
             │       │       └── Context Graph
             │       └── Human Approval
             │               └── Durable Workflow Engine
-            ├── Domain Ontology
+            │
+            ├── Domain Package System (vendor-neutral IRs → adapters)
+            │       ├── Domain Definition IR + Compiler
+            │       ├── Domain Ontology (package content → ontology adapter)
+            │       ├── Semantic Metrics Layer (package content → semantic adapter)
+            │       ├── Agent Registry (package content → agent runtime)
+            │       ├── Tool Registry (package content → tool adapter)
+            │       ├── Authorization models (package content → auth adapter)
+            │       ├── Policies (package content → policy adapter)
+            │       └── Durable Workflows (package content → workflow adapter)
+            │
+            ├── Domain Ontology Runtime
             │       ├── Semantic Metrics Layer
             │       │       └── Analytical Engine
             │       ├── Context Graph
             │       │       └── Knowledge Engine
             │       │               └── Retrieval Engine
-            │       └── Policy Evaluation (ontology rules)
-            ├── Domain Package System
-            │       ├── Domain Ontology (package content)
-            │       ├── Agent Registry (package content)
-            │       ├── Tool Registry (package content)
-            │       ├── Semantic Metrics Layer (package content)
-            │       └── Durable Workflow Engine (package content)
+            │       └── Domain Constraints
+            │
             ├── Data / Context Ingestion
             │       └── Domain Ontology (schema mapping)
+            │
             ├── Action Engine
             │       └── Tool Registry
+            │
             ├── Decision Intelligence
             │       ├── Event Intelligence
             │       └── Context Graph
+            │
             └── Metadata/Governance
 
 Cross-cutting: Observability, Evaluation, Security, Provenance
+
+Note: Product backend APIs (non-intelligence CRUD) do not flow
+through the Intelligence Gateway. See gateway boundary in
+architecture/reference-architecture.md.
 ```
 
-**NOTE:** This capability model includes 32 capabilities. The Domain Package System (32) is the core extension mechanism that enforces product agnosticism — all domain intelligence enters the platform through packages, never through core modifications.
+**NOTE:** This capability model includes 33 capabilities. Identity & Federation (33) is now a first-class capability separate from Authorization (3) and Policy (31). The Domain Package System (32) enforces product agnosticism through vendor-neutral IRs and compiler adapters. All domain intelligence enters the platform through packages, never through core modifications.

@@ -66,12 +66,21 @@ The experience layer is product-defining. No generic OSS UI framework captures t
 **Strategy: BUILD (composing adopted components)**
 No existing OSS project provides a complete AI gateway. Build by composing: LiteLLM (model routing) + OpenFGA (authorization) + custom logic (budget, governance, tenant isolation).
 
-### Identity & Authorization
-**Strategy: ADOPT OpenFGA + BUILD delegation layer**
-- **OpenFGA** (Apache 2.0, CNCF Incubating): Sub-ms performance, contextual tuples, strong multi-tenancy via store-per-tenant. ADOPT.
+### Authorization (ReBAC)
+**Proposed strategy: ADOPT OpenFGA + BUILD delegation layer** | Selection stage: CANDIDATE
+- **OpenFGA** (Apache 2.0, CNCF Incubating): Sub-ms performance, contextual tuples, strong multi-tenancy via store-per-tenant. Leading candidate for authorization adapter.
 - **Delegation layer**: User → Agent → Tool permission propagation (On-Behalf-Of pattern). No OSS solves this. BUILD.
 - **SpiceDB**: Strong alternative but OpenFGA has better documentation and CNCF backing.
-- **OPA**: Complementary for policy enforcement, not a ReBAC replacement.
+- **OPA**: Complementary for policy enforcement (see Policy Evaluation below), not a ReBAC replacement.
+- **Note**: Authorization is distinct from Identity & Federation (see below) and Policy Evaluation.
+
+### Identity & Federation
+**Proposed strategy: ADOPT identity platform + BUILD agent identity layer** | Selection stage: NOT STARTED
+- Identity answers "Who is this?" and "How did they authenticate?" — separate from authorization ("Is X allowed?")
+- Covers: OIDC, OAuth 2.x, SAML 2.0, SCIM, workload identity (SPIFFE/SPIRE), MFA, enterprise federation
+- Candidates to research: Keycloak (Apache 2.0), Ory (Apache 2.0), ZITADEL (Apache 2.0)
+- Agent identity delegation tokens are a BUILD responsibility
+- See `architecture/identity-federation-architecture.md`
 
 ### Model Gateway
 **Strategy: WRAP LiteLLM**
@@ -80,9 +89,9 @@ No existing OSS project provides a complete AI gateway. Build by composing: Lite
 - Wrap with platform-specific routing, tenant isolation, and budget logic.
 
 ### Agent Runtime
-**Strategy: WRAP Agno (primary) + LangGraph (secondary)**
-- **Agno** (Apache 2.0): PRIMARY — richest feature set (teams, workflows, memory, knowledge, RBAC, tracing), PostgreSQL-native storage, multi-tenancy support.
-- **LangGraph** (MIT): SECONDARY — largest community, most production deployments, best for complex state machine orchestration.
+**Proposed strategy: WRAP Agno (leading candidate) + LangGraph (alternative candidate)** | Selection stage: CANDIDATE
+- **Agno** (Apache 2.0): Leading candidate — richest feature set (teams, workflows, memory, knowledge, RBAC, tracing), PostgreSQL-native storage, multi-tenancy support.
+- **LangGraph** (MIT): Alternative candidate — largest community, most production deployments, best for complex state machine orchestration.
 - **Google ADK** (Apache 2.0): Best A2A/MCP protocol support. Consider for V2 when A2A becomes relevant.
 - **Strands / MS Agent Framework**: Too new. Monitor.
 - Wrap the primary runtime with platform-specific tool/auth/observability integration.

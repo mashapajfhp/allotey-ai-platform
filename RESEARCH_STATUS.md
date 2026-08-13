@@ -41,26 +41,28 @@ A technology cannot become SELECTED until it passes all stages:
 
 > **These are leading hypotheses, not final architecture decisions.** Several alternatives remain unresearched. The PostgreSQL unified data layer is a consequential simplification that needs workload validation (spike 001). The ontology compiler scope needs deeper specification (spike 008). The true infrastructure footprint has not been calculated (see `architecture/runtime-dependency-matrix.md`). Entire capability areas are missing from the candidate architecture (ML platform, data ingestion, secure compute, secrets management). Treat all entries below as CANDIDATE pending validation.
 
-| Layer | Technology | License | Strategy | Selection Stage |
-|-------|-----------|---------|----------|----------------|
-| Unified Data | PostgreSQL + Apache AGE + pgvector | PostgreSQL License / Apache 2.0 | ADOPT | CANDIDATE — spike 001 required |
-| Agent Runtime | Agno | Apache 2.0 | WRAP (primary) | CANDIDATE — spike 005 required |
-| Agent Runtime (complex) | LangGraph | MIT | WRAP (secondary) | CANDIDATE — spike 005 required |
-| Durable Workflows | Temporal | MIT | ADOPT | CANDIDATE — spike 006 required |
-| Model Gateway | LiteLLM | MIT (core) | WRAP | CANDIDATE |
-| Authorization | OpenFGA | Apache 2.0 (CNCF) | ADOPT | CANDIDATE — spike 004 required |
-| Policy Evaluation | OPA / Cedar | Apache 2.0 | ADOPT | RESEARCHING — separate from ReBAC |
-| Semantic Layer | Cube | Apache 2.0 (core) | WRAP | CANDIDATE — spike 003 required |
-| AI Observability | Langfuse | MIT (core) | ADOPT | CANDIDATE — infrastructure cost underestimated |
-| Analytical Querying | DuckDB | MIT | ADOPT (analytical engine, NOT event store) | CANDIDATE |
-| Observability Store | ClickHouse | Apache 2.0 | ADOPT (required by Langfuse) | CANDIDATE |
-| Tool Protocol | MCP | MIT | ADOPT | CANDIDATE — spike 007 required |
-| Context Graph | Graphiti concepts + AGE | Apache 2.0 | EXTEND/BUILD (not ADOPT — AGE driver needed) | CANDIDATE — spike 002 required |
-| ML/AI Infrastructure | PyTorch, Transformers, vLLM, etc. | Apache 2.0 / BSD | ADOPT | RESEARCHING — libraries free; models need individual review |
-| Ontology | Ontology IR + Compiler | — | BUILD | RESEARCHING — IR concept needs design (spike 008) |
-| Data Ingestion | TBD (Airbyte, Debezium, dlt, etc.) | Various | TBD | NOT STARTED |
-| Secure Compute | TBD (Firecracker, gVisor, WASM, etc.) | Various | TBD | NOT STARTED |
-| Secrets Management | TBD (OpenBao, SPIFFE/SPIRE, etc.) | Various | TBD | NOT STARTED |
+| Layer | Technology | License | Proposed Strategy | Selection Stage | Validation Required |
+|-------|-----------|---------|-------------------|----------------|-------------------|
+| Unified Data | PostgreSQL + Apache AGE + pgvector | PostgreSQL License / Apache 2.0 | ADOPT | CANDIDATE | spike 001 |
+| Agent Runtime | Agno | Apache 2.0 | WRAP (leading candidate) | CANDIDATE | spike 005 |
+| Agent Runtime (complex) | LangGraph | MIT | WRAP (alternative candidate) | CANDIDATE | spike 005 |
+| Durable Workflows | Temporal | MIT | ADOPT | CANDIDATE | spike 006 |
+| Model Gateway | LiteLLM | MIT (core) | WRAP | CANDIDATE | — |
+| Authorization | OpenFGA | Apache 2.0 (CNCF) | ADOPT | CANDIDATE | spike 004 |
+| Policy Evaluation | OPA / Cedar | Apache 2.0 | ADOPT | RESEARCHING | separate from ReBAC |
+| Semantic Layer | Cube | Apache 2.0 (core) | WRAP | CANDIDATE | spike 003 |
+| AI Observability | Langfuse | MIT (core) | ADOPT | CANDIDATE | infrastructure cost review |
+| Analytical Querying | DuckDB | MIT | ADOPT (embedded engine) | CANDIDATE | — |
+| Observability Store | ClickHouse | Apache 2.0 | ADOPT (required by Langfuse) | CANDIDATE | — |
+| Tool Protocol | MCP | MIT | ADOPT (exposed through, not fundamentally) | CANDIDATE | spike 007 |
+| Context Graph | Graphiti concepts + AGE | Apache 2.0 | EXTEND/BUILD (custom driver needed) | CANDIDATE | spike 002 |
+| ML/AI Infrastructure | PyTorch, Transformers, vLLM, etc. | Apache 2.0 / BSD | ADOPT (libraries); models need individual review | RESEARCHING | — |
+| Domain Definition IR | Domain Definition IR + Compiler | — | BUILD (core IP) | RESEARCHING | spike 008 |
+| Domain Package System | Package system + governance | — | BUILD (core IP) | RESEARCHING | spike 011 |
+| Identity & Federation | TBD (Keycloak, Ory, ZITADEL, etc.) | Various | TBD | NOT STARTED | — |
+| Data Ingestion | TBD (Airbyte, Debezium, dlt, etc.) | Various | TBD | NOT STARTED | — |
+| Secure Compute | TBD (Firecracker, gVisor, WASM, etc.) | Various | TBD | NOT STARTED | — |
+| Secrets Management | TBD (OpenBao, SPIFFE/SPIRE, etc.) | Various | TBD | NOT STARTED | — |
 
 ### Open Questions Before Any Technology Becomes SELECTED
 
@@ -103,15 +105,15 @@ A technology cannot become SELECTED until it passes all stages:
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| Cube | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0 core fully functional self-hosted. ADOPT. Build custom MCP server. |
+| Cube | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0 core fully functional self-hosted. Leading candidate for semantic engine adapter. |
 | Rill | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Interesting for embedded analytics, not a semantic layer replacement. |
 
 ## Open-Source — Agent Runtime
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| Agno | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. PRIMARY runtime — RBAC, multi-tenancy, PostgreSQL-native, teams, memory. |
-| LangGraph | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. SECONDARY runtime — best for complex state machines, largest community. |
+| Agno | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Leading candidate — RBAC, multi-tenancy, PostgreSQL-native, teams, memory. |
+| LangGraph | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. Alternative candidate — best for complex state machines, largest community. |
 | Google ADK | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Best A2A/MCP support. Consider for V2. |
 | Strands | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. AWS-backed but too new and limited docs. Monitor. |
 | Microsoft Agent Framework | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. Very new. Enterprise focus. Monitor. |
@@ -120,13 +122,13 @@ A technology cannot become SELECTED until it passes all stages:
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| LiteLLM | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT core genuine. ADOPT. Use OpenFGA for auth instead of LiteLLM enterprise RBAC. |
+| LiteLLM | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT core genuine. Leading candidate for model gateway adapter. Use platform authorization instead of LiteLLM enterprise RBAC. |
 
 ## Open-Source — Knowledge & Retrieval
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| pgvector | `DEEP REVIEW COMPLETE` | 2026-08-13 | PostgreSQL extension. ADOPT for V1. Graduate to Qdrant at scale. |
+| pgvector | `DEEP REVIEW COMPLETE` | 2026-08-13 | PostgreSQL extension. Leading candidate for V1 vector search. Graduate to Qdrant at scale. |
 | LanceDB | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Interesting but pgvector preferred for V1 unification. |
 | Qdrant | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. V2 candidate when pgvector outgrown. |
 | Weaviate | `NOT STARTED` | — | — |
@@ -135,8 +137,8 @@ A technology cannot become SELECTED until it passes all stages:
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| DuckDB | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. ADOPT for V1 embedded analytics. Zero-server deployment. |
-| ClickHouse | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. ADOPT when Langfuse demands it. Not needed until observability scale. |
+| DuckDB | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. Leading candidate for V1 embedded analytics. Zero-server deployment. |
+| ClickHouse | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Required when Langfuse is adopted. Not needed until observability scale. |
 | Apache Pinot | `NOT STARTED` | — | Real-time analytics |
 | Apache Druid | `NOT STARTED` | — | — |
 
@@ -144,7 +146,7 @@ A technology cannot become SELECTED until it passes all stages:
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| OpenFGA | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0, CNCF Incubating. ADOPT. Sub-ms performance. Build delegation layer on top. |
+| OpenFGA | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0, CNCF Incubating. Leading candidate for authorization adapter. Sub-ms performance. Build delegation layer on top. |
 | SpiceDB | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Strong alternative but OpenFGA has better CNCF backing. |
 | OPA | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Complementary for policy enforcement, not ReBAC replacement. |
 
@@ -152,7 +154,7 @@ A technology cannot become SELECTED until it passes all stages:
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| Langfuse | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT core. All core features MIT. ADOPT. Requires ClickHouse. |
+| Langfuse | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT core. All core features MIT. Leading candidate for AI observability. Requires ClickHouse. |
 | OpenTelemetry | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Foundation for all observability. ADOPT. |
 | Arize Phoenix | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Alternative to Langfuse, less feature-rich. |
 
@@ -160,7 +162,7 @@ A technology cannot become SELECTED until it passes all stages:
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| Temporal | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. ADOPT. Only viable open-source durable workflow engine. |
+| Temporal | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. Leading candidate (sole viable open-source durable workflow engine after Inngest/Restate excluded). |
 | Inngest | `EXCLUDED` | 2026-08-13 | SSPL — cannot use in SaaS. Excluded. |
 | Restate | `EXCLUDED` | 2026-08-13 | BSL 1.1 — NOT open source until conversion date. Excluded. |
 
@@ -175,7 +177,7 @@ A technology cannot become SELECTED until it passes all stages:
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| MCP | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. ADOPT Day 1. Target 2025-06-18 spec. Build governance layer. |
+| MCP | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. Leading candidate for tool protocol adapter. Target 2025-06-18 spec. Build governance layer. |
 | A2A | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. NOT for V1. Design for compatibility, adopt in V2. |
 
 ## Open-Source — Emerging Platforms
@@ -240,8 +242,14 @@ A technology cannot become SELECTED until it passes all stages:
 | Open-Source Matrix | `IN RESEARCH` | 2026-08-13 | Contradictions being resolved |
 | Licensing Matrix | `IN RESEARCH` | 2026-08-13 | Methodology corrected, legal precision improved |
 | Build vs Adopt Analysis | `IN RESEARCH` | 2026-08-13 | Downgraded from DEEP REVIEW — decisions are CANDIDATE not SELECTED |
-| Domain Package Architecture | `IN RESEARCH` | 2026-08-13 | NEW: Product agnosticism, package structure, two-domain validation test |
-| Architecture Spikes | `NOT STARTED` | 2026-08-13 | 11 validation spikes defined (added 011: domain package validation) |
+| Domain Package Architecture | `IN RESEARCH` | 2026-08-13 | Updated: vendor-neutral packages, supply-chain security, Intelligence-as-Code framing |
+| Domain Definition IR | `IN RESEARCH` | 2026-08-13 | NEW: Composed IR (Ontology + Semantic + Policy + Action + Event + Workflow + Agent Capability) |
+| Platform Tenancy Model | `IN RESEARCH` | 2026-08-13 | NEW: Product vs tenant hierarchy, isolation matrix |
+| Platform API Architecture | `IN RESEARCH` | 2026-08-13 | NEW: Stable API contracts, versioning, SDK strategy |
+| Identity & Federation | `IN RESEARCH` | 2026-08-13 | NEW: Separate from authorization and policy |
+| Data Ownership Model | `IN RESEARCH` | 2026-08-13 | NEW: Platform-managed, federated, materialized modes |
+| Enterprise NFR Architecture | `IN RESEARCH` | 2026-08-13 | NEW: SLOs, RTO/RPO, data residency, BYOK, compliance |
+| Architecture Spikes | `NOT STARTED` | 2026-08-13 | 11+ validation spikes defined |
 | ADR Process | `INITIAL REVIEW COMPLETE` | 2026-08-13 |
 
 ## Open-Source — ML/AI Infrastructure

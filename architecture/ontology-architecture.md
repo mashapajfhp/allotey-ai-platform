@@ -63,51 +63,99 @@ Per-entity-type and per-instance access control:
 
 ---
 
-## Canonical Ontology Intermediate Representation (IR)
+## Domain Definition IR — Beyond Ontology Alone
 
-### Why TypeScript Is Not the Answer
+### Why a Single Ontology IR Is Not Sufficient
 
-Earlier iterations of this architecture assumed TypeScript as the canonical ontology representation. This is premature. TypeScript is one possible authoring interface, but conflating the authoring format with the canonical representation creates several problems:
+The earlier architecture proposed a single Ontology IR that the compiler would use to generate database schemas, authorization models, semantic layers, MCP tools, and more. This is conceptually appealing but has a fundamental problem:
 
-- **Lock-in to a single ecosystem.** Teams that work in Python, YAML, or visual editors cannot participate as first-class ontology authors.
-- **Compilation target confusion.** If TypeScript IS the ontology, what compiles it? TypeScript is not designed to be a compiler input for generating database schemas, authorization models, and semantic layers.
-- **IP fragility.** The core intellectual property should be in a format-independent representation and the compiler that processes it, not in any single authoring DSL.
+**You cannot automatically derive all semantics, permissions, and business policies merely from entity ontology.**
 
-The architecture should instead be based on a **canonical Ontology Intermediate Representation (IR)** with multiple authoring interfaces that all compile down to it.
+Consider an entity definition:
+
+```
+Invoice
+  amount: decimal
+  owner: User
+  status: enum[draft, submitted, approved, paid]
+```
+
+This does NOT automatically tell us:
+- `Revenue = sum(amount) WHERE status = 'paid' AND type != 'tax'` ← semantic definition
+- `Finance managers can approve invoices under $50,000 except related-party invoices` ← policy definition
+- `When invoice.status changes to 'submitted', notify the assigned approver` ← event/workflow definition
+- `The invoice agent can read all invoices but can only approve those assigned to the requesting user's team` ← agent capability definition
+
+These are **separately authored domain meanings**, not derivable from entity structure.
+
+### The Domain Definition IR
+
+The solution is a composed IR that includes multiple sub-IRs, each addressing a different aspect of domain intelligence:
+
+```
+DOMAIN DEFINITION IR
+         │
+         ├── Ontology IR        (entities, relationships, actions, constraints)
+         ├── Semantic IR         (measures, dimensions, calculations, time grains)
+         ├── Authorization IR    (roles, relationships, permissions, delegation)
+         ├── Policy IR           (rules, conditions, constraints, compliance)
+         ├── Action IR           (action schemas, validation, side effects, approvals)
+         ├── Event IR            (event types, triggers, subscriptions, patterns)
+         ├── Workflow IR         (process definitions, steps, approvals, signals)
+         └── Agent Capability IR (agent definitions, instructions, tool access, reasoning)
+```
+
+Each sub-IR is authored independently (though they cross-reference). The compiler validates cross-IR consistency and produces runtime artifacts through adapters.
 
 ### Architecture
 
 ```
-       CANONICAL ONTOLOGY IR
-                |
-       +--------+---------+
-       |        |         |
-      TS       YAML      UI
-    authoring authoring authoring
-       |        |         |
-       +--------+---------+
-                v
-             COMPILER
-                |
-      +---------+-------------+
-      v         v             v
-API Schema  Permissions     Semantics
-      |         |             |
-      v         v             v
-MCP Tools   OpenFGA       Cube models
+  AUTHORING INTERFACES
+       │
+  TS  YAML  UI  Python
+       │
+       ▼
+  DOMAIN DEFINITION IR (vendor-neutral)
+       │
+       ├── Ontology IR ──────────┐
+       ├── Semantic IR ──────────┤
+       ├── Authorization IR ─────┤
+       ├── Policy IR ────────────┤
+       ├── Action IR ────────────┤
+       ├── Event IR ─────────────┤
+       ├── Workflow IR ──────────┤
+       └── Agent Capability IR ──┤
+                                 │
+                           COMPILER
+                                 │
+                           ADAPTERS
+                        ┌────┬────┬────┐
+                        ▼    ▼    ▼    ▼
+                     DB   Auth  Sem  Tools ...
+                    (PG) (ReBAC)(Cube)(MCP)
 ```
 
-Multiple authoring interfaces (TypeScript DSL, YAML definitions, visual UI editor, potentially Python/Pydantic) all produce the same canonical IR. The compiler then emits all downstream artifacts from this single source of truth.
+**Critically:** the adapters translate vendor-neutral IR to specific infrastructure products. Replacing Cube with another semantic engine, or OpenFGA with another authorization system, means writing a new adapter — not changing domain packages or the IR.
 
-### The IR Is the Core IP
+### Why TypeScript Is Not the Answer
 
-The Ontology IR and its compiler are the potential core intellectual property of the platform. The IR must be:
+Earlier iterations assumed TypeScript as the canonical ontology representation. This is premature. TypeScript is one possible authoring interface, but conflating the authoring format with the canonical representation creates:
+
+- **Lock-in to a single ecosystem.** Teams that work in Python, YAML, or visual editors cannot participate as first-class ontology authors.
+- **Compilation target confusion.** TypeScript is not designed to be a compiler input for generating database schemas, authorization models, and semantic layers.
+- **IP fragility.** The core IP should be in a format-independent representation and the compiler that processes it, not in any single authoring DSL.
+
+### The Domain Definition IR Is the Core IP
+
+The Domain Definition IR, its compiler, and its adapter framework are potentially the platform's most defensible intellectual property. The IR must be:
 
 - **Format-independent** -- not tied to any programming language's type system
 - **Self-describing** -- carries enough metadata to generate any downstream artifact
 - **Versionable** -- supports schema evolution without breaking existing consumers
-- **Validatable** -- can be checked for consistency before compilation
+- **Validatable** -- can be checked for cross-IR consistency before compilation
 - **Extensible** -- new output targets can be added without modifying the IR itself
+- **Composable** -- sub-IRs can reference each other (semantic IR references ontology IR entities)
+- **Vendor-neutral** -- no references to Cube, OpenFGA, OPA, Temporal, MCP, or any specific product
 
 ### Authoring Formats Under Research
 
@@ -130,23 +178,27 @@ The likely outcome is that the IR is a purpose-built format (possibly JSON-based
 
 ### Compiler Output Targets
 
-The compiler should emit the following from a single ontology definition:
+The compiler processes the composed Domain Definition IR and emits runtime artifacts through adapters. Adapters are infrastructure-specific; the IR is vendor-neutral.
 
-| Output | Purpose |
-|--------|---------|
-| **Database schema** | PostgreSQL DDL, migration files |
-| **Graph schema** | Neo4j/TypeDB schema definitions |
-| **JSON Schema** | Validation schemas for API payloads |
-| **OpenAPI specs** | REST API documentation and client generation |
-| **MCP tool definitions** | Tool schemas for agent consumption |
-| **OpenFGA authorization models** | Fine-grained authorization rules |
-| **Cube semantic models** | Analytics semantic layer definitions |
-| **SDK types (TypeScript)** | Typed client libraries for frontend/backend |
-| **SDK types (Python)** | Typed client libraries for ML/data pipelines |
-| **Event schemas** | CloudEvents / AsyncAPI definitions for event-driven flows |
-| **Validation rules** | Runtime validators for entity mutations |
-| **UI metadata** | Form schemas, display rules, field ordering |
-| **Agent context definitions** | Structured context for AI agents to understand entities |
+| Output | Source IR(s) | Adapter translates to |
+|--------|-------------|----------------------|
+| **Database schema** | Ontology IR | DDL for selected database (e.g., PostgreSQL) |
+| **Graph schema** | Ontology IR | Schema for selected graph store |
+| **JSON Schema** | Ontology IR | Validation schemas for API payloads |
+| **OpenAPI specs** | Ontology IR, Action IR | REST API documentation and client generation |
+| **Tool definitions** | Action IR, Agent Capability IR | Tool schemas for selected tool protocol (e.g., MCP) |
+| **Authorization models** | Authorization IR | Model for selected auth system (e.g., OpenFGA) |
+| **Semantic models** | Semantic IR | Model for selected semantic engine (e.g., Cube) |
+| **Policy rules** | Policy IR | Rules for selected policy engine (e.g., OPA, Cedar) |
+| **Workflow definitions** | Workflow IR | Definitions for selected workflow engine (e.g., Temporal) |
+| **SDK types (TypeScript)** | Ontology IR, Action IR | Typed client libraries |
+| **SDK types (Python)** | Ontology IR, Action IR | Typed client libraries |
+| **Event schemas** | Event IR | Event definitions for selected event system |
+| **Validation rules** | Ontology IR, Policy IR | Runtime validators |
+| **UI metadata** | Ontology IR | Form schemas, display rules, field ordering |
+| **Agent context definitions** | Ontology IR, Agent Capability IR | Structured context for agent consumption |
+
+**Key principle:** Infrastructure product names (Cube, OpenFGA, MCP, Temporal, etc.) appear only in adapter implementations — never in the IR or domain packages.
 
 ---
 
@@ -189,6 +241,8 @@ The compiler should emit the following from a single ontology definition:
 
 ## References
 
+- `architecture/domain-package-architecture.md` -- Domain packages use the Domain Definition IR
+- `architecture/spikes/008-ontology-ir-compiler.md` -- Compiler architecture spike
 - `commercial-platforms/palantir/ontology.md` -- primary inspiration
 - `open-source/ontology-context/semantica.md` -- context graph approach
 - `open-source/ontology-context/typedb.md` -- typed ontology with reasoning

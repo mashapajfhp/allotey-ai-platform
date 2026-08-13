@@ -157,9 +157,30 @@ The topmost layer. All consumers of the platform's intelligence capabilities.
 
 **Key principle:** The applications layer never talks directly to data stores or models. All intelligence flows through the gateway.
 
+### Gateway Boundary — Intelligence vs. Product Backend
+
+The AI platform governs **intelligence operations** — agent invocations, knowledge queries, analytical reasoning, decisions, actions with provenance, and governed tool execution. It does NOT need to be the backend for every product operation.
+
+```
+            PRODUCT
+        ┌──────┴──────┐
+        │             │
+        ▼             ▼
+Product Backend   AI Platform
+   APIs              APIs
+    │                 │
+    ▼                 ▼
+Operational       Intelligence
+Systems            Gateway
+```
+
+Ordinary product operations (edit profile, upload file, change password) flow through the product's own backend. Intelligence operations (ask a question, run an agent, query metrics, execute a governed action, retrieve knowledge) flow through the Intelligence Gateway.
+
+**The distinction matters.** Without it, the AI platform accidentally becomes a universal application backend — a much larger and less focused problem.
+
 ### AI / Intelligence Gateway
 
-The single governed entry point. Every request — whether from a user, an application, a scheduled job, or an external system — passes through this gateway.
+The governed entry point for all **intelligence operations**. Every request that involves AI reasoning, knowledge retrieval, analytics, governed actions, or agent execution passes through this gateway.
 
 **Responsibilities:**
 - Authenticate the requesting identity (user, service, agent)
@@ -167,10 +188,10 @@ The single governed entry point. Every request — whether from a user, an appli
 - Enforce rate limits and cost budgets
 - Apply governance policies (data classification, compliance rules)
 - Route to appropriate agent or service
-- Enforce tenant isolation — no request can access another tenant's data
+- Enforce tenant and product isolation
 - Produce audit records for every request
 
-**Key principle:** Nothing bypasses the gateway. If it's not authorized, it doesn't execute.
+**Key principle:** No intelligence operation bypasses the gateway. If it's not authorized, it doesn't execute. Ordinary product CRUD that does not involve intelligence capabilities does not need to flow through this gateway.
 
 **Identity delegation model:**
 ```
