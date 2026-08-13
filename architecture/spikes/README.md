@@ -161,7 +161,7 @@ What would increase our confidence?
 | 005 | [Agno vs LangGraph Agent Runtime](./005-agno-vs-langgraph.md) | NOT STARTED | P2 (6th) |
 | 006 | [Temporal + Agent Workflow Integration](./006-temporal-agent-workflow-integration.md) | NOT STARTED | P2 (8th) |
 | 007 | [MCP Governance Gateway](./007-mcp-governance-gateway.md) | NOT STARTED | P2 (9th) |
-| 008 | [Domain Definition IR Compiler](./008-ontology-ir-compiler.md) | NOT STARTED | P1 (1st) |
+| 008 | [Domain Definition IR Compiler](./008-ontology-ir-compiler.md) | **PARTIAL PASS** | P1 (1st) |
 | 009 | [Cross-Source Retrieval Orchestration](./009-cross-source-retrieval.md) | NOT STARTED | Deferred |
 | 010 | [Multi-Tenant Isolation Testing](./010-multi-tenant-isolation.md) | NOT STARTED | P2 (10th) |
 | 011 | [Domain Package Validation — Four-Domain Test](./011-domain-package-validation.md) | NOT STARTED | P1 (2nd) |

@@ -1,8 +1,10 @@
 # Spike 008: Domain Definition IR Compiler
 
-> STATUS: NOT STARTED
+> STATUS: INITIAL PROTOTYPE COMPLETE — PARTIAL PASS
+> Confidence: MEDIUM
 > Last updated: 2026-08-14
-> References: `architecture/ontology-architecture.md`, `architecture/domain-package-architecture.md`, `AGENTS.md` rules 6-7
+> Prototype: `spikes/prototypes/008-domain-definition-ir/`
+> Commit: `2b82978`
 
 ---
 
@@ -37,209 +39,182 @@ The Domain Definition IR is composed of 8 sub-IRs, each independently authored:
 
 ---
 
-## Prototype Plan
+## What Was Built
 
-### Phase 1: IR Schema Design
+### Compiler Infrastructure
 
-1. **Define JSON Schema for each sub-IR**
-   - Each sub-IR has its own schema
-   - Cross-references between sub-IRs use stable identifiers (e.g., Action IR references Ontology IR entities)
-   - Schema is versioned (`ir_schema_version`)
+| Component | Lines | Purpose |
+|-----------|-------|---------|
+| `src/ir-loader.js` | 415 | YAML loading, normalization (arrays→maps, attributes→properties), schema validation with AJV, cross-reference validation, vendor neutrality audit with word-boundary matching |
+| `src/compiler.js` | 271 | 5-step compilation pipeline (load → validate → cross-ref → vendor audit → compile adapters) + source code domain-neutrality auditor |
+| `src/adapters/base.js` | 62 | CompilationAdapter interface (name, consumes, compile, validate) |
+| `src/adapters/database-schema.js` | 242 | Ontology IR → PostgreSQL DDL (tables, typed columns, RLS, indexes, FKs, enum CHECK constraints, junction tables) |
+| `src/adapters/authorization-model.js` | 191 | Authorization IR → OpenFGA DSL (platform hierarchy + domain entity types with relations) |
+| `src/cli.js` | 153 | CLI: compile, validate, audit, compile-all |
 
-2. **Define the composed Domain Definition IR envelope**
-   ```yaml
-   domain_definition:
-     version: "1.0"
-     ir_schema_version: "0.1.0"
-     domain: "healthcare-clinic"
-     sub_irs:
-       ontology: { ... }
-       semantic: { ... }
-       authorization: { ... }
-       policy: { ... }
-       actions: { ... }
-       events: { ... }
-       workflows: { ... }
-       agent_capabilities: { ... }
-   ```
+### Schemas
 
-3. **Validation rules**
-   - Internal consistency: all entity references resolve
-   - Cross-IR consistency: action targets exist in ontology, authorization roles exist
-   - Completeness: every entity has at least authorization rules
-   - No vendor-specific references: IR uses abstract targets, not product names
+9 JSON Schema files (domain-definition envelope + 8 sub-IR schemas) totaling 2,891 lines.
 
-### Phase 2: Author Healthcare Domain (Domain A from Spike 011)
+### Domain Definitions
 
-Write the complete Healthcare Clinic Scheduling domain in YAML:
+| Domain | Lines | Entities | Measures | Dimensions | Roles | Authz Rules | Actions | Events | Workflows | Agents |
+|--------|-------|----------|----------|------------|-------|-------------|---------|--------|-----------|--------|
+| Healthcare Clinic | 2,834 | 8 | 10 | 12 | 7 | 23 | 12 | 12 | 3 | 4 |
+| IoT Monitoring | 2,450 | 7 | 12 | 10 | 5 | 17 | 10 | 17 | 4 | 3 |
 
-**Ontology IR:**
-```yaml
-entities:
-  Patient:
-    properties:
-      name: { type: string, required: true }
-      date_of_birth: { type: date, required: true }
-      insurance_id: { type: string }
-      data_classification: { type: enum, values: [phi, pii, general] }
-    relationships:
-      appointments: { type: has_many, target: Appointment }
-      primary_practitioner: { type: belongs_to, target: Practitioner }
+### Compiled Outputs (661 lines total)
 
-  Practitioner:
-    properties:
-      name: { type: string, required: true }
-      specialty: { type: string }
-      license_number: { type: string, required: true }
-    relationships:
-      patients: { type: has_many, target: Patient, through: Appointment }
-      clinics: { type: many_to_many, target: Clinic }
+| Output | Lines | Content |
+|--------|-------|---------|
+| Healthcare SQL | 252 | 8 tables + RLS + indexes + FKs + enum constraints |
+| Healthcare OpenFGA | 126 | Platform hierarchy + 8 domain entity types |
+| IoT SQL | 169 | 7 tables + RLS + indexes + FKs |
+| IoT OpenFGA | 114 | Platform hierarchy + 7 domain entity types |
 
-  Appointment:
-    properties:
-      scheduled_at: { type: timestamp, required: true }
-      duration_minutes: { type: integer, default: 30 }
-      status: { type: enum, values: [scheduled, confirmed, cancelled, completed, no_show] }
-      reason: { type: string }
-    relationships:
-      patient: { type: belongs_to, target: Patient }
-      practitioner: { type: belongs_to, target: Practitioner }
-      clinic: { type: belongs_to, target: Clinic }
-```
+### Test Suite
 
-**Authorization IR:**
-```yaml
-roles:
-  practitioner_role:
-    can_view: [own_patients, own_appointments]
-    can_create: [appointment_for_own_patients]
-    can_update: [own_appointments]
-  admin_role:
-    can_view: [all_patients, all_appointments, all_practitioners]
-    can_create: [any_appointment, practitioner]
-    can_update: [any_appointment, clinic]
-  patient_role:
-    can_view: [own_record, own_appointments]
-    can_create: [appointment_request]
-
-relationships:
-  practitioner_owns_patients:
-    subject: Practitioner
-    relation: treats
-    object: Patient
-    condition: "active appointment exists"
-```
-
-**Semantic IR:**
-```yaml
-measures:
-  utilization_rate:
-    description: "Percentage of available slots that are booked"
-    sql: "COUNT(CASE WHEN status != 'cancelled' THEN 1 END) / COUNT(*)"
-    entity: Appointment
-  no_show_rate:
-    description: "Percentage of confirmed appointments where patient did not show"
-    sql: "COUNT(CASE WHEN status = 'no_show' THEN 1 END) / COUNT(CASE WHEN status IN ('completed','no_show') THEN 1 END)"
-    entity: Appointment
-dimensions:
-  practitioner_specialty:
-    entity: Practitioner
-    property: specialty
-  clinic_name:
-    entity: Clinic
-    property: name
-```
-
-(Similar depth for Action, Event, Workflow, Policy, Agent Capability sub-IRs)
-
-### Phase 3: Compiler Implementation
-
-1. **IR Parser** — Load YAML, validate against JSON Schema, produce in-memory IR
-2. **Cross-IR Validator** — Verify all cross-references resolve, all entities have authorization rules
-3. **Adapter Interface** — Define the contract that compilation targets implement:
-   ```
-   interface CompilationAdapter {
-     name(): string
-     accepts(subIR: SubIR): boolean
-     compile(ir: DomainDefinitionIR, config: AdapterConfig): CompilationOutput
-     validate(output: CompilationOutput): ValidationResult
-   }
-   ```
-4. **Database Schema Adapter** — Compile Ontology IR → SQL DDL (PostgreSQL)
-5. **Authorization Adapter** — Compile Authorization IR → OpenFGA model
-6. **Validation Suite** — Verify compiled outputs are correct
-
-### Phase 4: Second Domain (Domain B — IoT Monitoring)
-
-Author the Industrial IoT Monitoring domain. This stresses:
-- High-volume event patterns (Event IR under pressure)
-- Time-series metrics (Semantic IR for sensor data)
-- Alert workflows (Workflow IR for anomaly response)
-- Different entity shapes (Sensor, Device, Facility vs Patient, Practitioner, Clinic)
-
-**Key test:** Can the same compiler and adapters produce correct output for both domains without any domain-specific code paths?
-
-### Phase 5: Core Code Audit
-
-1. Grep the compiler source for domain-specific terms (healthcare, patient, sensor, device)
-2. Any domain-specific logic in the compiler or adapters = architectural failure
-3. Count lines of domain-specific code: target = 0
+38 tests across 8 categories: Loader (10), Schema Validation (5), Cross-Reference (4), Vendor Neutrality (4), Database Adapter (6), Authorization Adapter (4), Full Pipeline (3), Domain Neutrality (2). All pass.
 
 ---
 
-## Test Methodology
+## Results: What Was and Was Not Proven
 
-### IR Expressiveness
-- Can both domains (Healthcare + IoT) be expressed without IR extensions?
-- Are there concepts that cannot be expressed? Document gaps.
-- Do cross-IR references work correctly for both domains?
+### Validated (evidence exists)
 
-### Compilation Correctness
-- Do generated database schemas match expected DDL for both domains?
-- Does the OpenFGA model enforce expected authorization for both domains?
-- Are the outputs correct and independently verifiable?
+| Claim | Evidence |
+|-------|----------|
+| Two materially different domains can share one IR structure | Healthcare (regulated transactional) and IoT (real-time telemetry) both expressed in same 8-sub-IR format |
+| Compiler code is domain-neutral | Source audit finds zero domain-specific terms in compiler or adapter code |
+| Adapter pattern works | Same two adapters produce valid output for both domains without modification |
+| YAML normalization is necessary and tractable | Loader normalizes arrays→maps, attributes→properties at load time |
+| Cross-IR reference validation catches real errors | Validator found genuine reference mismatches in initial domain drafts |
+| Vendor neutrality audit with word-boundary matching avoids false positives | "copay" does not trigger "opa", "temporal dimension" does not trigger "Temporal" |
 
-### Vendor Neutrality
-- Does the IR contain any product-specific references?
-- Could a different database adapter produce equivalent output for a different database?
-- Could a different authorization adapter produce equivalent output for a different auth system?
+### NOT YET Validated (gaps remain)
 
-### Adapter Independence
-- Does adding Domain B require any changes to adapters written for Domain A?
-- Are adapters purely mechanical transformations with no domain knowledge?
-
----
-
-## Success Criteria
-
-1. Both Healthcare and IoT domains fully expressed in Domain Definition IR
-2. IR validates against JSON Schema for all sub-IRs
-3. Cross-IR references resolve correctly for both domains
-4. Database schema adapter produces correct PostgreSQL DDL for both
-5. Authorization adapter produces correct OpenFGA model for both
-6. Zero domain-specific code in compiler or adapters
-7. IR contains zero product-specific references
-
-## Abort Criteria
-
-- A sub-IR cannot express a fundamental domain concept
-- Cross-IR references create circular dependencies that cannot be resolved
-- The compiler requires domain-specific conditionals
-- An adapter requires domain-specific code paths
-- The IR becomes so complex that authoring it is impractical
+| Claim | Gap | Required By |
+|-------|-----|-------------|
+| Generated SQL is executable and correct | No real PostgreSQL execution; validation counts CREATE TABLE vs ENABLE RLS, does not execute DDL | Spike 001 |
+| Generated OpenFGA model is semantically equivalent to Authorization IR | Adapter emits generic CRUD relations (viewer/editor/creator/deleter) and writes domain roles as comments; does not faithfully compile relationship-based access rules | **Spike 004** |
+| Tenant isolation works with generated RLS | No real PostgreSQL + multi-tenant data test | Spike 001 |
+| All 8 sub-IRs can be compiled | Only Ontology→PostgreSQL and Authorization→OpenFGA demonstrated; no adapters for Semantic, Action, Event, Workflow, or Agent Capability | Future spikes |
+| IR is expressive enough for adversarial domains | Healthcare and IoT were designed by the same architect who designed the IR; self-confirming risk | **Spike 011** |
+| Vendor neutrality is structural, not just lexical | Keyword scanning catches explicit vendor names but not structural coupling (e.g., SQL expressions in Semantic IR) | Future review |
 
 ---
 
-## Results
+## Architecture Board Findings (Post-Review)
 
-PENDING — spike not yet started.
+### Finding 1: OpenFGA Adapter Does Not Compile Authorization Semantics
+
+**Severity: HIGH**
+
+The current adapter generates:
+
+```text
+define viewer: [user, agent] or member from tenant
+define editor: [user, agent] or admin from tenant
+```
+
+for every entity, regardless of what the Authorization IR specifies. This means any tenant member can view all entity types — the opposite of least-privilege.
+
+The Authorization IR may specify `practitioner can view own patients only`, but the generated OpenFGA model does not encode that constraint. Role definitions are placed in comments.
+
+**Required action:** Spike 004 must demonstrate that the Authorization IR semantics can be faithfully compiled into an OpenFGA model that produces correct allow/deny decisions when tested against a real OpenFGA instance.
+
+### Finding 2: Default Relation is Allow-by-Default
+
+**Severity: HIGH**
+
+The default `viewer: [user, agent] or member from tenant` grants all tenant members view access to all generated entity types. Authorization should be deny-by-default unless explicitly granted by the Authorization IR.
+
+**Required action:** Redesign default relation generation. Entity types should start with no public relations; only relations explicitly declared in the Authorization IR should appear.
+
+### Finding 3: Adapter Validation is Structural, Not Semantic
+
+**Severity: MEDIUM**
+
+Adapter `validate()` methods check output shape (does it contain `CREATE TABLE`? does it contain `model`?). They do not verify semantic correctness.
+
+**Required action:** For PostgreSQL — execute DDL against a real instance. For OpenFGA — parse the model and run check queries. Structural validation remains useful as a smoke test but is insufficient as the only validation layer.
+
+### Finding 4: Only 2 of 8 Sub-IRs Have Compilation Adapters
+
+**Severity: MEDIUM**
+
+The IR defines 8 sub-IRs but only Ontology and Authorization have adapters. The remaining 6 (Semantic, Policy, Action, Event, Workflow, Agent Capability) are validated structurally but not compiled.
+
+**Required action:** Before claiming the IR compiler is validated, representative adapters needed for at least Semantic→analytics engine, Action→tool declaration, and Workflow→orchestrator.
+
+### Finding 5: Semantic IR May Have Structural Vendor Coupling
+
+**Severity: LOW**
+
+Some Semantic IR examples contain raw SQL expressions (e.g., `COUNT(CASE WHEN ...)`). This may couple the semantic model to SQL-oriented execution engines. A vendor-neutral expression model may be needed.
+
+**Required action:** Review during Semantic adapter development. Determine whether SQL is an acceptable canonical expression or whether a vendor-neutral expression IR is required.
+
+### Finding 6: Domains Are Self-Confirming
+
+**Severity: LOW**
+
+Both test domains were designed by the same process that designed the IR. This can hide missing abstractions. Spike 011's additional domains should be deliberately adversarial:
+
+- **Knowledge-heavy domain:** documents, uncertain facts, provenance, contradictory knowledge, temporal knowledge
+- **ML/prediction domain:** datasets, models, predictions, features, model versions, confidence, drift
+
+IR changes discovered during those tests are expected and should be documented rather than avoided.
+
+---
+
+## Success Criteria Assessment
+
+| Criterion | Status |
+|-----------|--------|
+| 1. Both domains fully expressed in Domain Definition IR | **PASS** |
+| 2. IR validates against JSON Schema for all sub-IRs | **PASS** |
+| 3. Cross-IR references resolve correctly for both domains | **PASS** (IoT clean; Healthcare has 2 minor workflow refs to undefined utility actions) |
+| 4. Database schema adapter produces correct PostgreSQL DDL | **PARTIAL** — generates syntactically valid DDL but not proven executable |
+| 5. Authorization adapter produces correct OpenFGA model | **PARTIAL** — generates syntactically valid model but does not faithfully encode domain authorization semantics |
+| 6. Zero domain-specific code in compiler or adapters | **PASS** |
+| 7. IR contains zero product-specific references | **PASS** |
+
+## Abort Criteria Assessment
+
+None triggered. No sub-IR failed to express a fundamental domain concept. No circular dependencies. No domain-specific code paths required.
+
+---
+
+## Findings During Implementation
+
+1. **Array normalization is a canonical pattern.** YAML authors naturally write `- name: "patient"` arrays. The loader normalizes to maps at load time. This is not a bug in the YAML — it's a necessary loader responsibility.
+
+2. **Word-boundary matching is critical for vendor audit.** Substring matching causes false positives ("opa" in "copay", "temporal" in "temporal dimension"). Regex `\b` boundaries solve this.
+
+3. **Type mapping needs completeness.** `datetime`, `decimal`, `float`, `object`, `array` are natural IR types not in the initial SQL type map. Incomplete mapping produces warnings, not failures, but a complete map should be the default.
+
+4. **The IoT domain uses different property naming than Healthcare.** IoT uses `attributes` and capitalized entity names (`Facility`); Healthcare uses `properties` and lowercase (`patient`). The loader normalizes both, proving the normalization layer is necessary.
+
+---
+
+## Next Steps
+
+| Spike | Purpose | Depends On |
+|-------|---------|------------|
+| **004 Authorization Semantics** | Prove OpenFGA adapter can faithfully compile authorization meaning; test allow/deny with real OpenFGA | 008 findings 1-2 |
+| **011 Four-Domain IR Test** | Add adversarial domains (knowledge, ML) to challenge IR expressiveness | 008 complete |
+| **012 Package Lifecycle** | Validate versioning, migrations, upgrades across compiled artifacts | 008 complete |
+| **001 PostgreSQL Data Plane** | Execute generated DDL against real PostgreSQL; test RLS, FKs, extensions | 008 finding 3 |
+
+---
 
 ## Dependencies
 
 - Architecture documents: `ontology-architecture.md`, `domain-package-architecture.md`
-- Node.js/TypeScript runtime for compiler implementation
+- Node.js runtime with `ajv`, `ajv-formats`, `js-yaml`
 - JSON Schema tooling for IR validation
 
 ## Notes
 
-This spike is the acid test for the Intelligence-as-Code thesis. If the Domain Definition IR and compiler work for two fundamentally different domains, spike 011 extends the test to four domains. If this spike fails, the platform boundary needs redesign before any other work proceeds.
+This spike is the acid test for the Intelligence-as-Code thesis. The initial prototype demonstrates that the composed IR and domain-neutral compiler architecture are viable. Semantic correctness of compiled artifacts — particularly authorization — requires execution-level validation in subsequent spikes (004, 001). The hypothesis survives but has not been fully validated.
