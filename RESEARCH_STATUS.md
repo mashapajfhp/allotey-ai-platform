@@ -11,6 +11,30 @@
 | `INITIAL REVIEW COMPLETE` | First pass done, major findings documented |
 | `DEEP REVIEW COMPLETE` | Thorough investigation finished |
 | `NEEDS VERIFICATION` | Findings need freshness check or cross-reference |
+| `EXCLUDED` | Evaluated and excluded from adoption (license or maturity) |
+
+## Core Constraint
+
+**Open-source first. No paid dependencies for V1.** All adopted components must be MIT or Apache 2.0. MPL-2.0 acceptable with discipline. SSPL, AGPL, BSL, and custom licenses excluded from adoption (study only).
+
+---
+
+## V1 Technology Stack (Converged)
+
+| Layer | Technology | License | Strategy |
+|-------|-----------|---------|----------|
+| Unified Data | PostgreSQL + Apache AGE + pgvector | PostgreSQL License / Apache 2.0 | ADOPT |
+| Agent Runtime | Agno | Apache 2.0 | WRAP (primary) |
+| Agent Runtime (complex) | LangGraph | MIT | WRAP (secondary) |
+| Durable Workflows | Temporal | MIT | ADOPT |
+| Model Gateway | LiteLLM | MIT (core) | WRAP |
+| Authorization | OpenFGA | Apache 2.0 (CNCF) | ADOPT |
+| Semantic Layer | Cube | Apache 2.0 (core) | WRAP |
+| AI Observability | Langfuse | MIT (core) | ADOPT |
+| Embedded Analytics | DuckDB | MIT | ADOPT |
+| Observability Store | ClickHouse | Apache 2.0 | ADOPT (via Langfuse) |
+| Tool Protocol | MCP | MIT | ADOPT |
+| Ontology | Custom compiler | — | BUILD (core IP) |
 
 ---
 
@@ -18,62 +42,62 @@
 
 | Platform | Status | Last Updated | Notes |
 |----------|--------|--------------|-------|
-| Palantir | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Foundry, AIP, Ontology studied via official docs |
+| Palantir | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Foundry, AIP, Ontology studied — key architectural inspiration |
 | Databricks | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Unity Catalog, Genie, Mosaic AI, MCP studied |
 | Snowflake | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Cortex suite, Semantic Views studied |
-| Microsoft | `IN RESEARCH` | 2026-08-13 | Foundry, Agent Framework — structure created |
-| AWS | `IN RESEARCH` | 2026-08-13 | AgentCore — structure created |
-| Google | `IN RESEARCH` | 2026-08-13 | ADK, A2A — structure created |
-| Salesforce | `IN RESEARCH` | 2026-08-13 | Agentforce — structure created |
+| Microsoft | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Foundry, Agent Framework, identity delegation patterns |
+| AWS | `INITIAL REVIEW COMPLETE` | 2026-08-13 | AgentCore, knowledge bases, observability |
+| Google | `INITIAL REVIEW COMPLETE` | 2026-08-13 | ADK, A2A protocol, Gemini enterprise |
+| Salesforce | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Agentforce, Data Cloud |
 
 ## Open-Source — Ontology & Context
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| Semantica | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Context graphs, decision intelligence |
-| TrustGraph | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Graph RAG, holonic context |
-| Graphiti | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Temporal knowledge graph |
-| TypeDB | `NOT STARTED` | — | Typed entities/relationships |
-| TerminusDB | `NOT STARTED` | — | Versioned data/graph model |
+| Semantica | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. Decision objects valuable. Borrow patterns, don't adopt. |
+| TrustGraph | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Context Cores concept valuable. Too operationally heavy. |
+| Graphiti | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. ADOPT temporal knowledge graph with Apache AGE backend (not Neo4j/FalkorDB). |
+| TypeDB | `DEEP REVIEW COMPLETE` | 2026-08-13 | MPL-2.0. Don't adopt — too complex. Inspire type system design. |
+| TerminusDB | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Borrow versioning concepts. |
 
 ## Open-Source — Semantic Layer
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| Cube | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Deep study — semantic model, multi-tenancy |
-| Rill | `NOT STARTED` | — | BI-as-code |
+| Cube | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0 core fully functional self-hosted. ADOPT. Build custom MCP server. |
+| Rill | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Interesting for embedded analytics, not a semantic layer replacement. |
 
 ## Open-Source — Agent Runtime
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| LangGraph | `NOT STARTED` | — | StateGraph, checkpointing |
-| Google ADK | `NOT STARTED` | — | Multi-agent, A2A |
-| Strands | `NOT STARTED` | — | AWS agent SDK |
-| Agno | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Agents, teams, workflows, MCP |
-| Microsoft Agent Framework | `NOT STARTED` | — | Orchestration, graph execution |
+| Agno | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. PRIMARY runtime — RBAC, multi-tenancy, PostgreSQL-native, teams, memory. |
+| LangGraph | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. SECONDARY runtime — best for complex state machines, largest community. |
+| Google ADK | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Best A2A/MCP support. Consider for V2. |
+| Strands | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. AWS-backed but too new and limited docs. Monitor. |
+| Microsoft Agent Framework | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. Very new. Enterprise focus. Monitor. |
 
 ## Open-Source — Model Gateway
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| LiteLLM | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Provider abstraction, routing, licensing |
+| LiteLLM | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT core genuine. ADOPT. Use OpenFGA for auth instead of LiteLLM enterprise RBAC. |
 
 ## Open-Source — Knowledge & Retrieval
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| LanceDB | `NOT STARTED` | — | Vector storage, hybrid retrieval |
-| Qdrant | `NOT STARTED` | — | — |
+| pgvector | `DEEP REVIEW COMPLETE` | 2026-08-13 | PostgreSQL extension. ADOPT for V1. Graduate to Qdrant at scale. |
+| LanceDB | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Interesting but pgvector preferred for V1 unification. |
+| Qdrant | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. V2 candidate when pgvector outgrown. |
 | Weaviate | `NOT STARTED` | — | — |
-| pgvector | `NOT STARTED` | — | — |
 
 ## Open-Source — Analytics
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| ClickHouse | `NOT STARTED` | — | MergeTree, event analytics |
-| DuckDB | `NOT STARTED` | — | Embedded analytics |
+| DuckDB | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. ADOPT for V1 embedded analytics. Zero-server deployment. |
+| ClickHouse | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. ADOPT when Langfuse demands it. Not needed until observability scale. |
 | Apache Pinot | `NOT STARTED` | — | Real-time analytics |
 | Apache Druid | `NOT STARTED` | — | — |
 
@@ -81,50 +105,50 @@
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| OpenFGA | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Zanzibar model, ReBAC |
-| SpiceDB | `NOT STARTED` | — | — |
-| OPA | `NOT STARTED` | — | — |
+| OpenFGA | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0, CNCF Incubating. ADOPT. Sub-ms performance. Build delegation layer on top. |
+| SpiceDB | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Strong alternative but OpenFGA has better CNCF backing. |
+| OPA | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Complementary for policy enforcement, not ReBAC replacement. |
 
 ## Open-Source — Observability
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| Langfuse | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Traces, evals, prompt management |
-| Arize Phoenix | `NOT STARTED` | — | — |
-| OpenTelemetry | `NOT STARTED` | — | — |
+| Langfuse | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT core. All core features MIT. ADOPT. Requires ClickHouse. |
+| OpenTelemetry | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Foundation for all observability. ADOPT. |
+| Arize Phoenix | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Alternative to Langfuse, less feature-rich. |
 
 ## Open-Source — Workflows
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| Temporal | `NOT STARTED` | — | Durable workflow runtime |
-| Inngest | `NOT STARTED` | — | — |
-| Restate | `NOT STARTED` | — | — |
+| Temporal | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. ADOPT. Only viable open-source durable workflow engine. |
+| Inngest | `EXCLUDED` | 2026-08-13 | SSPL — cannot use in SaaS. Excluded. |
+| Restate | `EXCLUDED` | 2026-08-13 | BSL 1.1 — NOT open source until conversion date. Excluded. |
 
 ## Open-Source — Metadata & Governance
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| DataHub | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Metadata graph, lineage, MCP |
-| OpenMetadata | `NOT STARTED` | — | — |
+| DataHub | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. DEFER to V2 — too operationally heavy for V1. |
+| OpenMetadata | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Alternative to DataHub, simpler. |
 
 ## Open-Source — Protocols
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| MCP | `NOT STARTED` | — | Tools, resources, prompts |
-| A2A | `NOT STARTED` | — | Agent-to-agent protocol |
+| MCP | `DEEP REVIEW COMPLETE` | 2026-08-13 | MIT. ADOPT Day 1. Target 2025-06-18 spec. Build governance layer. |
+| A2A | `DEEP REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. NOT for V1. Design for compatibility, adopt in V2. |
 
 ## Open-Source — Emerging Platforms
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| Xpert | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Multi-agent BI, AGPL license concern |
-| Dify | `NOT STARTED` | — | Custom license concern |
-| Wanwu | `NOT STARTED` | — | Enterprise agent platform |
-| OpenFang | `NOT STARTED` | — | Agent OS concepts |
-| Agnt | `NOT STARTED` | — | Goals, tasks, self-improvement |
-| Compozy | `NOT STARTED` | — | Control-plane architecture |
+| Xpert | `EXCLUDED` | 2026-08-13 | AGPL-3.0. Study only. Do not adopt. |
+| Dify | `EXCLUDED` | 2026-08-13 | Custom license. Study only. Do not adopt. |
+| Wanwu | `NEEDS VERIFICATION` | 2026-08-13 | License unverified |
+| OpenFang | `NEEDS VERIFICATION` | 2026-08-13 | License unverified |
+| Agnt | `NEEDS VERIFICATION` | 2026-08-13 | License unverified |
+| Compozy | `NEEDS VERIFICATION` | 2026-08-13 | License unverified |
 
 ## Architecture Deliverables
 
@@ -132,17 +156,17 @@
 |-------------|--------|--------------|
 | Capability Model | `INITIAL REVIEW COMPLETE` | 2026-08-13 |
 | Reference Architecture | `INITIAL REVIEW COMPLETE` | 2026-08-13 |
-| Security Threat Model | `NOT STARTED` | — |
+| Security Threat Model | `INITIAL REVIEW COMPLETE` | 2026-08-13 |
 | Commercial Platform Matrix | `INITIAL REVIEW COMPLETE` | 2026-08-13 |
-| Open-Source Matrix | `INITIAL REVIEW COMPLETE` | 2026-08-13 |
-| Licensing Matrix | `INITIAL REVIEW COMPLETE` | 2026-08-13 |
-| Build vs Adopt Analysis | `NOT STARTED` | — |
+| Open-Source Matrix | `DEEP REVIEW COMPLETE` | 2026-08-13 |
+| Licensing Matrix | `DEEP REVIEW COMPLETE` | 2026-08-13 |
+| Build vs Adopt Analysis | `DEEP REVIEW COMPLETE` | 2026-08-13 |
 | ADR Process | `INITIAL REVIEW COMPLETE` | 2026-08-13 |
 
 ## Data Pipelines
 
 | Project | Status | Last Updated | Notes |
 |---------|--------|--------------|-------|
-| Dagster | `NOT STARTED` | — | Assets, lineage |
+| Dagster | `INITIAL REVIEW COMPLETE` | 2026-08-13 | Apache 2.0. Assets, lineage |
 | Prefect | `NOT STARTED` | — | — |
 | Airflow | `NOT STARTED` | — | — |

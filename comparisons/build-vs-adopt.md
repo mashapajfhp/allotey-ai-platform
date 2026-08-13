@@ -1,7 +1,11 @@
 # Build vs. Adopt Analysis
 
-> STATUS: IN RESEARCH
+> STATUS: DEEP REVIEW COMPLETE
 > Last updated: 2026-08-13
+
+## Core Constraint
+
+**Open-source first. No paid dependencies for V1.** Every adopted component must carry a permissive license (MIT or Apache 2.0). MPL-2.0 is acceptable with discipline (file-level copyleft). SSPL, AGPL, BSL, and custom licenses are excluded from adoption — study only.
 
 ## Decision Framework
 
@@ -14,127 +18,191 @@
 
 ---
 
+## V1 Technology Stack — Converged Decisions
+
+The deep research phase converged on a dramatically simplified V1 architecture. The key insight: **PostgreSQL with extensions (Apache AGE for graphs, pgvector for vectors) can serve as a unified data layer**, eliminating the need for separate graph and vector databases in V1.
+
+### V1 Infrastructure Footprint
+
+| Service | Purpose | License | Notes |
+|---------|---------|---------|-------|
+| PostgreSQL | Transactional data, graph (AGE), vectors (pgvector) | PostgreSQL License | Single instance for V1 |
+| Temporal | Durable workflows | MIT | Self-hosted |
+| ClickHouse | Observability store (via Langfuse) | Apache 2.0 | Enters when Langfuse is adopted |
+| DuckDB | Embedded analytics | MIT | In-process, zero server |
+
+**Total new services for V1: 2** (PostgreSQL + Temporal). DuckDB is embedded. ClickHouse enters only when Langfuse demands it.
+
+---
+
 ## Capability-Level Analysis
 
 ### Experience Layer
-**Recommendation: BUILD**
-The experience layer is product-defining. It determines how users interact with the platform. No generic OSS UI framework captures the platform's unique value proposition.
+**Strategy: BUILD**
+The experience layer is product-defining. No generic OSS UI framework captures the platform's unique value proposition.
 
 ### AI Gateway
-**Recommendation: BUILD (wrapping components)**
-No existing OSS project provides a complete AI gateway with identity, authorization, budgets, governance, and routing. Build by composing: LiteLLM for model routing, OpenFGA for authorization, custom logic for budget/governance.
+**Strategy: BUILD (composing adopted components)**
+No existing OSS project provides a complete AI gateway. Build by composing: LiteLLM (model routing) + OpenFGA (authorization) + custom logic (budget, governance, tenant isolation).
 
 ### Identity & Authorization
-**Recommendation: ADOPT OpenFGA + BUILD delegation layer**
-OpenFGA provides excellent ReBAC. The agent delegation layer (user → agent → tool permission propagation) must be built — no OSS project solves this well.
+**Strategy: ADOPT OpenFGA + BUILD delegation layer**
+- **OpenFGA** (Apache 2.0, CNCF Incubating): Sub-ms performance, contextual tuples, strong multi-tenancy via store-per-tenant. ADOPT.
+- **Delegation layer**: User → Agent → Tool permission propagation (On-Behalf-Of pattern). No OSS solves this. BUILD.
+- **SpiceDB**: Strong alternative but OpenFGA has better documentation and CNCF backing.
+- **OPA**: Complementary for policy enforcement, not a ReBAC replacement.
 
 ### Model Gateway
-**Recommendation: WRAP LiteLLM**
-LiteLLM provides strong provider abstraction. Wrap with platform-specific routing, tenant isolation, and budget logic.
+**Strategy: WRAP LiteLLM**
+- **LiteLLM** (MIT core): 100+ providers, proven proxy mode, cost tracking. Genuine MIT for all core features.
+- **Key decision**: Use OpenFGA for authorization instead of LiteLLM's enterprise RBAC features. This keeps the stack fully open-source.
+- Wrap with platform-specific routing, tenant isolation, and budget logic.
 
 ### Agent Runtime
-**Recommendation: WRAP (LangGraph or Agno)**
-Adopt a runtime and wrap with platform-specific tool/auth/observability integration. NEEDS DEEPER EVALUATION to select between candidates.
+**Strategy: WRAP Agno (primary) + LangGraph (secondary)**
+- **Agno** (Apache 2.0): PRIMARY — richest feature set (teams, workflows, memory, knowledge, RBAC, tracing), PostgreSQL-native storage, multi-tenancy support.
+- **LangGraph** (MIT): SECONDARY — largest community, most production deployments, best for complex state machine orchestration.
+- **Google ADK** (Apache 2.0): Best A2A/MCP protocol support. Consider for V2 when A2A becomes relevant.
+- **Strands / MS Agent Framework**: Too new. Monitor.
+- Wrap the primary runtime with platform-specific tool/auth/observability integration.
 
 ### Agent Registry
-**Recommendation: BUILD**
+**Strategy: BUILD**
 No strong standalone OSS exists. Build as part of the control plane.
 
 ### Tool Registry
-**Recommendation: BUILD on MCP**
-Adopt MCP as the tool interface standard. Build the governance layer (authorization, rate limiting, audit).
+**Strategy: BUILD on MCP**
+- **MCP** (MIT): ADOPT as tool interface standard on Day 1. Target 2025-06-18 spec version.
+- BUILD the governance layer (authorization, rate limiting, audit, schema validation).
 
 ### MCP / A2A Gateway
-**Recommendation: ADOPT protocols + BUILD gateway**
-Adopt MCP and A2A protocol specifications. Build the governance gateway that mediates access.
+**Strategy: ADOPT MCP + DESIGN FOR A2A**
+- **MCP**: Adopt Day 1. Build governance gateway that mediates access.
+- **A2A**: Not for V1. Design agent interfaces so A2A can be adopted in V2 without architectural rework.
 
 ### Domain Ontology
-**Recommendation: BUILD — core IP**
-The ontology compiler, domain model definition, and ontology-to-agent compilation are strategically important. Study Palantir, TypeDB, and Semantica for concepts. Implement independently.
+**Strategy: BUILD — core IP**
+- The ontology-as-code compiler is the platform's primary differentiator.
+- **Architecture**: TypeScript entity definitions → compiler → PostgreSQL schemas + API endpoints + MCP tools + JSON Schema validation + OpenFGA authorization rules.
+- **Key insight**: "Palantir's ontology power comes from the compiler, not a sophisticated database."
+- Study Palantir (ontology structure), TypeDB (type system rigor), Semantica (decision objects), TrustGraph (context cores). Implement independently.
+- **TypeDB** (MPL-2.0): Don't adopt — operational complexity too high. Inspire type system.
+- **Semantica** (MIT): Borrow decision intelligence patterns.
+- **TrustGraph** (Apache 2.0): Borrow context cores concept. Too operationally heavy to adopt.
 
 ### Semantic Metrics Layer
-**Recommendation: WRAP Cube**
-Cube is production-ready and well-aligned. Wrap with ontology integration and platform-specific security context.
+**Strategy: WRAP Cube**
+- **Cube** (Apache 2.0 core): Production-ready, well-documented, strong semantic model, multi-tenancy via security context.
+- Apache 2.0 core is fully functional for self-hosted deployment.
+- Official MCP server is cloud-only; build custom MCP server for self-hosted Cube.
+- Wrap with ontology integration and platform-specific security context.
 
 ### Context Graph
-**Recommendation: BUILD (inspired by Graphiti)**
-Temporal knowledge graph concepts from Graphiti are valuable. Build with platform-specific integration to ontology and event store.
+**Strategy: BUILD (inspired by Graphiti, on Apache AGE)**
+- **Graphiti** (MIT): Temporal knowledge graph concepts are architecturally important.
+- **Key discovery**: Graphiti's default backends (Neo4j = GPLv3, FalkorDB = SSPL) violate the open-source-first constraint.
+- **Solution**: Use Apache AGE (PostgreSQL extension, Apache 2.0) as the graph backend.
+- Build platform-specific integration to ontology and event store.
 
 ### Knowledge Engine
-**Recommendation: ADOPT vector DB + BUILD pipeline**
-Adopt a vector database (evaluate LanceDB, pgvector, Qdrant). Build the ingestion, chunking, and retrieval orchestration pipeline.
+**Strategy: ADOPT pgvector (V1) + BUILD pipeline**
+- **pgvector** (PostgreSQL extension): ADOPT for V1. Keeps everything in PostgreSQL.
+- Graduate to **Qdrant** (Apache 2.0) when vector workloads outgrow pgvector.
+- Build ingestion, chunking, and retrieval orchestration pipeline.
 
 ### Retrieval Engine
-**Recommendation: BUILD**
+**Strategy: BUILD**
 Cross-source retrieval orchestration (vector + graph + structured) is platform-specific.
 
 ### Analytical Engine
-**Recommendation: ADOPT ClickHouse (or DuckDB for embedded)**
-Both are production-ready. Adopt based on workload requirements.
+**Strategy: ADOPT DuckDB (V1) + ClickHouse (scale)**
+- **DuckDB** (MIT): ADOPT for V1 embedded analytics. Zero-server deployment, excellent for analytical queries.
+- **ClickHouse** (Apache 2.0): ADOPT when observability demands it (Langfuse requires ClickHouse).
+- DuckDB handles V1 workloads; ClickHouse enters when event analytics scale demands it.
 
 ### Event Intelligence
-**Recommendation: BUILD on adopted analytical engine**
-Event storage via ClickHouse; build pattern detection and causal analysis.
+**Strategy: BUILD on adopted analytical engine**
+Event storage via DuckDB (V1) / ClickHouse (scale). Build pattern detection and causal analysis.
 
 ### Decision Intelligence
-**Recommendation: BUILD — core IP**
-No mature OSS exists. Decision objects, provenance, outcome learning, and causal reasoning are a key differentiator.
+**Strategy: BUILD — core IP**
+No mature OSS exists. Decision objects (Observation → Evidence → Hypothesis → Decision → Action → Outcome) with provenance tracking are a key differentiator. Borrow concepts from Semantica's decision object model.
 
 ### Action Engine
-**Recommendation: BUILD**
+**Strategy: BUILD**
 Action governance (authorization, validation, audit, side effects) is security-critical and platform-specific.
 
 ### Human Approval
-**Recommendation: BUILD on adopted workflow engine**
-Build approval workflows using Temporal/Inngest as the durable execution substrate.
+**Strategy: BUILD on Temporal**
+Build approval workflows using Temporal as the durable execution substrate.
 
 ### Durable Workflow Engine
-**Recommendation: ADOPT Temporal (or Inngest for simpler needs)**
-Both are production-ready. Temporal for complex workflows; Inngest for simpler event-driven patterns.
+**Strategy: ADOPT Temporal**
+- **Temporal** (MIT): The only viable open-source durable workflow engine.
+- **Inngest** (SSPL): EXCLUDED — cannot use in SaaS without full source disclosure.
+- **Restate** (BSL 1.1): EXCLUDED — NOT open source until conversion date (typically 4 years after release).
+- Temporal is operationally complex but architecturally sound and MIT-licensed.
 
 ### Memory
-**Recommendation: BUILD on context graph**
-Agent memory should be a view over the context graph, not a separate system.
+**Strategy: BUILD on context graph**
+Agent memory should be a view over the temporal context graph, not a separate system. Agno's built-in memory model provides useful patterns.
 
 ### Metadata / Governance
-**Recommendation: WRAP DataHub**
-DataHub provides strong metadata graph capabilities. Wrap with platform ontology integration.
+**Strategy: DEFER DataHub to V2**
+- **DataHub** (Apache 2.0): Too operationally heavy for V1 (requires Kafka, Elasticsearch, Neo4j, MySQL, Zookeeper).
+- V1: Build lightweight metadata tracking within the platform.
+- V2: Evaluate DataHub or OpenMetadata when the operational budget allows.
 
 ### Observability
-**Recommendation: ADOPT OTel + WRAP Langfuse**
-OpenTelemetry as foundation; Langfuse for AI-specific observability.
+**Strategy: ADOPT OTel + Langfuse**
+- **OpenTelemetry** (Apache 2.0): Foundation — all components emit OTel telemetry.
+- **Langfuse** (MIT core): AI-specific observability (traces, evals, prompts, cost tracking). All core features are MIT.
+- Architecture: OTel for infrastructure, Langfuse for AI-specific concerns.
 
 ### Evaluation
-**Recommendation: ADOPT Langfuse/MLflow + BUILD domain-specific criteria**
-Framework from existing tools; domain-specific evaluation criteria are custom.
+**Strategy: ADOPT Langfuse evals + BUILD domain-specific criteria**
+Framework from Langfuse; domain-specific evaluation criteria are custom.
 
 ### Cost / Metering
-**Recommendation: WRAP LiteLLM cost tracking + BUILD platform metering**
-LiteLLM tracks token costs; build budget/allocation/alerting logic.
+**Strategy: WRAP LiteLLM cost tracking + BUILD platform metering**
+LiteLLM tracks token costs per provider; build budget allocation, alerting, and tenant-level metering.
 
 ### Deployment
-**Recommendation: ADOPT standard tooling (Kubernetes, containers)**
+**Strategy: ADOPT standard tooling (Kubernetes, containers)**
 Well-established patterns.
 
 ### Developer Platform
-**Recommendation: BUILD**
+**Strategy: BUILD**
 Product surface — SDKs, APIs, documentation, development workflows.
 
 ---
 
-## Potential Proprietary Value Areas
+## License-Excluded Technologies
 
-These are areas where building may create defensible IP:
+| Technology | License | Reason for Exclusion |
+|-----------|---------|---------------------|
+| Inngest | SSPL | Offering as managed service requires full source disclosure |
+| Restate | BSL 1.1 | Commercial use restricted until conversion date |
+| Xpert | AGPL-3.0 | Network use triggers full source disclosure of combined work |
+| Dify | Custom | Restricts commercial use, terms may change |
+| Neo4j Community | GPLv3 | Copyleft incompatible with proprietary platform |
+| FalkorDB | SSPL | Same restrictions as Inngest |
 
-| Area | Why It May Be Valuable | Confidence |
-|------|----------------------|------------|
-| Ontology compiler | No OSS equivalent; Palantir-like domain abstraction | Medium-High |
-| Cross-domain semantic abstraction | Unifying ontology + semantic layer + context graph | Medium |
-| Decision intelligence | First-class decision objects with provenance | Medium |
+---
+
+## Proprietary Value Areas
+
+These are areas where building creates defensible IP:
+
+| Area | Why It's Valuable | Confidence |
+|------|-------------------|------------|
+| Ontology-as-code compiler | No OSS equivalent; TypeScript definitions → compiled schemas/APIs/MCP/auth rules | High |
+| Cross-domain semantic abstraction | Unifying ontology + semantic layer + context graph | Medium-High |
+| Decision intelligence | First-class decision objects with provenance and outcome tracking | Medium |
 | Outcome learning | Situation → intervention → outcome learning loops | Medium |
-| Insight generation | Domain-aware intelligence synthesis | Medium |
 | Action governance | Authorization + validation + audit for AI actions | High |
-| Ontology-to-agent compilation | Generating agent tools/capabilities from ontology definitions | Medium-High |
+| Ontology-to-agent compilation | Generating agent tools/capabilities from ontology definitions | High |
+| Agent delegation model | User → Agent → Tool permission propagation (ReBAC-based) | High |
 
 **WARNING:** These are hypotheses, not conclusions. Each requires validation through prototyping and market research before committing significant development resources.
 
@@ -142,10 +210,12 @@ These are areas where building may create defensible IP:
 
 ## Summary
 
-| Strategy | Count | Examples |
-|----------|-------|---------|
-| Adopt | 5 | OpenFGA, ClickHouse/DuckDB, Temporal/Inngest, OTel, Kubernetes |
-| Wrap | 5 | LiteLLM, Cube, Langfuse, DataHub, agent runtime |
-| Build | 11 | Ontology, decision intelligence, action engine, AI gateway, experience layer, etc. |
+| Strategy | Count | Components |
+|----------|-------|-----------|
+| **Adopt** | 7 | OpenFGA, Temporal, DuckDB, ClickHouse, pgvector, OTel, MCP |
+| **Wrap** | 4 | LiteLLM, Cube, Agno, Langfuse |
+| **Build** | 12 | Ontology compiler, decision intelligence, action engine, AI gateway, experience layer, agent registry, tool registry, retrieval engine, event intelligence, human approval, memory, developer platform |
+| **Excluded** | 6 | Inngest (SSPL), Restate (BSL), Xpert (AGPL), Dify (custom), Neo4j (GPL), FalkorDB (SSPL) |
+| **Deferred** | 2 | DataHub (V2), A2A (V2) |
 
-The platform is primarily a **build** project with strategic adoption of proven infrastructure. The build areas concentrate in the intelligence/domain layer and the governance layer — where the platform's unique value resides.
+The platform is primarily a **build** project with strategic adoption of proven open-source infrastructure. The build areas concentrate in the intelligence/domain layer and the governance layer — where the platform's unique value resides. The open-source-first constraint has simplified the V1 stack significantly, with PostgreSQL + extensions serving as a unified data layer.

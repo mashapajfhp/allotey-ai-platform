@@ -31,9 +31,11 @@ These repositories can be used as dependencies, modified, and distributed with m
 
 ## Caution Required
 
+### Apache 2.0 (Recently Changed)
+- agno-agi/agno — changed from MPL-2.0 to Apache 2.0 in January 2025. Fully permissive now.
+
 ### MPL-2.0 (File-Level Copyleft)
-- agno-agi/agno — can use as dependency; if you modify Agno's source files, those files must stay MPL-2.0
-- typedb/typedb — same MPL-2.0 rules
+- typedb/typedb — can use as dependency; if you modify TypeDB's source files, those files must stay MPL-2.0
 
 ### Verify Before Use
 - BerriAI/litellm — verify enterprise features licensing

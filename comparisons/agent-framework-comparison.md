@@ -9,7 +9,7 @@
 |-----------|-----------|----------|---------|-----|-----|-------------|
 | LangGraph | LangChain | Python, JS | MIT | Yes | No | Yes |
 | Google ADK | Google | Python, JS | Apache 2.0 | Yes | Yes | Yes |
-| Agno | Agno AGI | Python | MPL-2.0 | Yes | Yes | Yes |
+| Agno | Agno AGI | Python | Apache 2.0 | Yes | Yes | Yes |
 | Strands | AWS | Python, TS | Apache 2.0 | Yes | No | Yes |
 | MS Agent Framework | Microsoft | Python, .NET | MIT | Yes | No | Yes |
 
@@ -33,7 +33,7 @@
 - **Model:** Agent → Team → Workflow hierarchy with rich built-in capabilities
 - **State:** Built-in memory (user, session, summary), knowledge stores
 - **Strengths:** Most batteries-included (memory, knowledge, tools, teams, RBAC, tracing)
-- **Weaknesses:** Python-only, MPL-2.0 license, newer project
+- **Weaknesses:** Python-only, newer project (license changed to Apache 2.0 in Jan 2025)
 - **Human-in-the-loop:** Built-in human approval in workflows
 
 ### Strands

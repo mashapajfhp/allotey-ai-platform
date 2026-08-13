@@ -24,7 +24,7 @@
 | google/adk-js | Apache 2.0 | Yes | Yes | Include license + NOTICE | None | None | Yes | Yes | Yes | Yes | LOW | |
 | strands-agents/sdk-python | Apache 2.0 | Yes | Yes | Include license + NOTICE | None | None | Yes | Yes | Yes | Yes | LOW | |
 | strands-agents/sdk-typescript | Apache 2.0 | Yes | Yes | Include license + NOTICE | None | None | Yes | Yes | Yes | Yes | LOW | |
-| agno-agi/agno | MPL-2.0 | Yes | Yes | Modified MPL files must be shared | None | File-level only | Yes | Yes | Caution | Caution | MEDIUM | Modified files must remain MPL-2.0; new files can be proprietary |
+| agno-agi/agno | Apache 2.0 | Yes | Yes | Include license + NOTICE | None | None | Yes | Yes | Yes | Yes | LOW | License changed from MPL-2.0 to Apache 2.0 when Phidata rebranded to Agno (Jan 2025) |
 | microsoft/agent-framework | MIT | Yes | Yes | Include license | None | None | Yes | Yes | Yes | Yes | LOW | |
 | **Semantic Layer** | | | | | | | | | | | | |
 | cube-js/cube | Apache 2.0 (core) | Yes | Yes | Include license | None | None | Yes | Yes | Yes | Yes | LOW | Verify EE/Cloud components |
@@ -48,7 +48,7 @@
 | **Workflows** | | | | | | | | | | | | |
 | temporalio/temporal | MIT | Yes | Yes | Include license | None | None | Yes | Yes | Yes | Yes | LOW | Cloud service is separate |
 | inngest/inngest | SSPL | Restricted | Yes | Source disclosure if offering as service | Yes — if offered as managed service | HIGH if offering as service | Yes (research) | Caution | Caution | NO | HIGH | SSPL prohibits offering as a managed service without full source disclosure |
-| restatedev/restate | NEEDS VERIFICATION | — | — | — | — | — | Yes (research) | VERIFY | VERIFY | VERIFY | UNKNOWN | Read LICENSE file before any use |
+| restatedev/restate | BSL 1.1 | Restricted | Yes | Converts to Apache 2.0 after 4 years | Yes — commercial use restricted | HIGH if commercial | Yes (research) | NO (until converts) | NO | NO | HIGH | Business Source License — NOT open source until conversion date |
 | **Metadata** | | | | | | | | | | | | |
 | datahub-project/datahub | Apache 2.0 | Yes | Yes | Include license | None | None | Yes | Yes | Yes | Yes | LOW | |
 | open-metadata/OpenMetadata | Apache 2.0 | Yes | Yes | Include license | None | None | Yes | Yes | Yes | Yes | LOW | |
@@ -78,11 +78,12 @@
 - **Must read the actual license text** before any use beyond research
 - Do not assume OSS-like freedoms
 
-### MPL-2.0 (Agno, TypeDB)
+### MPL-2.0 (TypeDB)
 - File-level copyleft — modified MPL files must remain MPL-2.0
 - New files can use any license
 - **Safe for:** Using as dependency (linking is OK)
 - **Caution for:** Modifying existing MPL files (those must stay MPL-2.0)
+- Note: Agno was previously MPL-2.0 but changed to Apache 2.0 in January 2025
 
 ### SSPL (Inngest)
 - **Server Side Public License** — similar to AGPL but stricter: if you offer Inngest as part of a managed service, you must open-source the entire service stack

@@ -74,7 +74,7 @@ Each technology is scored 1-5 on key dimensions. Scores must be justified — do
 | MCP support | 3 | 4 | 4 | 3 | 3 |
 | A2A support | 2 | 4 | 3 | 2 | 2 |
 | TypeScript support | 3 | 3 | 2 (Python-first) | 3 | 3 |
-| License friendliness | MIT | Apache 2.0 | MPL-2.0 | Apache 2.0 | MIT |
+| License friendliness | MIT | Apache 2.0 | Apache 2.0 | Apache 2.0 | MIT |
 
 **Key observations:**
 - **LangGraph** has the largest community and most production use
@@ -159,12 +159,13 @@ Each technology is scored 1-5 on key dimensions. Scores must be justified — do
 | Operational complexity | 2 (complex) | 4 (simpler) | 3 |
 | Human-in-the-loop | 4 | 3 | 3 |
 | Self-hostable | Yes (complex) | Yes | Yes |
-| License friendliness | MIT | Apache 2.0 | NEEDS VERIFICATION |
+| License friendliness | MIT | 1 (SSPL) — EXCLUDED | 1 (BSL 1.1) — EXCLUDED |
 
 **Key observations:**
-- **Temporal** is the gold standard but operationally complex
-- **Inngest** may be a better starting point — simpler, event-driven model
-- Decision depends on workflow complexity requirements
+- **Temporal** (MIT) is the only viable open-source durable workflow engine. ADOPT.
+- **Inngest** (SSPL) — EXCLUDED. Cannot use in SaaS without full source disclosure of entire service stack.
+- **Restate** (BSL 1.1) — EXCLUDED. NOT open source until conversion date (typically 4 years after release).
+- V1 decision: Temporal is the sole workflow engine despite operational complexity.
 
 ---
 
