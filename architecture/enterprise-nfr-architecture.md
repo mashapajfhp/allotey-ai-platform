@@ -11,17 +11,30 @@ Each NFR category below includes: what it means, why it matters architecturally,
 
 **Foundational constraint from `AGENTS.md` Rule 6:** The platform must be enterprise-grade. Enterprise-grade does not mean "lots of microservices." It means predictable contracts, isolation, governance, security, lifecycle management, observability, upgradeability, extensibility, reliability, and evidence that the platform behaves correctly.
 
+### NFR Status Labels
+
+Numbers and targets in this document carry one of the following labels:
+
+| Label | Meaning |
+|-------|---------|
+| **SELECTED** | Committed architectural requirement. The platform must meet this target. |
+| **CANDIDATE** | A reasonable target under active consideration. May be adopted, modified, or dropped. |
+| **EXAMPLE** | An illustrative number showing the range of possibilities. Not a commitment. |
+| **STRETCH** | An aspirational target for future versions. Not a V1 requirement. |
+
+Where no label is shown, the number is **EXAMPLE** by default — it illustrates the architectural implication, not a committed requirement. The research questions at the end of each section include selecting which targets to commit to.
+
 ---
 
 ## NFR-to-Architecture Influence Matrix
 
 This table summarizes how each NFR category drives specific architecture decisions. Detailed discussion follows in each section.
 
-| NFR Category | Architectural Implication | Affected Components |
-|-------------|--------------------------|---------------------|
-| **Availability (99.99%)** | Requires active-active or active-passive redundancy; no single points of failure; health checking at every layer | All — database, identity, agent runtime, gateway, workflow engine |
-| **RTO < 1 hour** | Requires automated failover; infrastructure-as-code; pre-provisioned standby environments | Deployment, database, identity provider, workflow state |
-| **RPO < 15 minutes** | Requires continuous replication or frequent snapshots; WAL shipping for databases | PostgreSQL, ClickHouse, object storage, event store |
+| NFR Category | Architectural Implication | Affected Components | Status |
+|-------------|--------------------------|---------------------|--------|
+| **Availability (99.99%)** | Requires active-active or active-passive redundancy; no single points of failure; health checking at every layer | All — database, identity, agent runtime, gateway, workflow engine | **EXAMPLE** (tier shown for architectural illustration) |
+| **RTO < 1 hour** | Requires automated failover; infrastructure-as-code; pre-provisioned standby environments | Deployment, database, identity provider, workflow state | **CANDIDATE** |
+| **RPO < 15 minutes** | Requires continuous replication or frequent snapshots; WAL shipping for databases | PostgreSQL, ClickHouse, object storage, event store | **CANDIDATE** |
 | **Data residency** | May require regional deployment; affects database topology, replication strategy, and CDN configuration | Database, object storage, identity provider, agent runtime |
 | **BYOK encryption** | Requires key management integration (KMS); affects all data-at-rest storage; adds operational complexity | PostgreSQL, ClickHouse, object storage, backup systems |
 | **Right to erasure (GDPR)** | Requires PII inventory; cascading deletion across all stores; audit of deletion completeness | All data stores, context graph, knowledge store, agent memory, logs |
@@ -40,14 +53,14 @@ This table summarizes how each NFR category drives specific architecture decisio
 
 Availability is expressed as uptime percentage over a measurement period (typically monthly or annually). Each additional "nine" represents a 10x reduction in allowed downtime and a significant increase in architectural complexity and cost.
 
-| Target | Annual Downtime | Monthly Downtime | Architectural Implication |
-|--------|----------------|------------------|--------------------------|
-| 99.9% ("three nines") | 8h 45m | 43m 50s | Single-region, redundant components, automated restart |
-| 99.95% | 4h 22m | 21m 55s | Single-region, active-passive failover, health-checked load balancing |
-| 99.99% ("four nines") | 52m 36s | 4m 23s | Multi-region or active-active, zero-downtime deployment, no single points of failure |
-| 99.999% ("five nines") | 5m 15s | 26s | Active-active multi-region, automatic failover, consensus-based systems — extremely expensive |
+| Target | Annual Downtime | Monthly Downtime | Architectural Implication | Status |
+|--------|----------------|------------------|--------------------------|--------|
+| 99.9% ("three nines") | 8h 45m | 43m 50s | Single-region, redundant components, automated restart | **CANDIDATE** for V1 |
+| 99.95% | 4h 22m | 21m 55s | Single-region, active-passive failover, health-checked load balancing | **EXAMPLE** |
+| 99.99% ("four nines") | 52m 36s | 4m 23s | Multi-region or active-active, zero-downtime deployment, no single points of failure | **STRETCH** |
+| 99.999% ("five nines") | 5m 15s | 26s | Active-active multi-region, automatic failover, consensus-based systems — extremely expensive | **STRETCH** |
 
-**Research decision needed:** What availability target does the platform commit to? This decision cascades into every infrastructure choice. A 99.9% target allows simpler architecture than 99.99%.
+**Research decision needed:** What availability target does the platform commit to? This decision cascades into every infrastructure choice. A 99.9% target allows simpler architecture than 99.99%. The NFR influence matrix header (99.99%) is an **EXAMPLE** showing the architectural implication at that tier, not a committed target.
 
 **Component-specific availability:** Not all components need the same availability target:
 - **AI Gateway and Identity Provider** — must match the overall platform SLA (on the critical path of every request)
@@ -285,17 +298,19 @@ GDPR Article 17 requires the ability to delete all personal data for a specific 
 
 Different data types have different retention requirements:
 
-| Data Type | Suggested Retention | Rationale |
-|-----------|--------------------|-----------|
-| Transactional data | Tenant-configurable (1-7 years) | Business requirements vary |
-| Audit logs | Compliance-driven (1-10 years) | See retention table above |
-| Observability traces | 30-90 days (hot), 1 year (cold) | Debugging and performance analysis |
-| Agent execution logs | 90 days (hot), 1 year (cold) | Agent quality analysis |
-| Event store | Indefinite or compliance-driven | Immutable business history |
-| Knowledge store documents | Until explicitly deleted | Document lifecycle managed by owner |
-| Analytical data | Tenant-configurable | Business intelligence needs |
-| Session data | Until session expiry + grace period | No value after session ends |
-| Backups | Rolling retention (daily: 7, weekly: 4, monthly: 12) | Recovery and compliance |
+All retention values below are **EXAMPLE** defaults. Actual retention policies will be determined by compliance framework selection and customer requirements.
+
+| Data Type | Suggested Retention | Rationale | Status |
+|-----------|--------------------|-----------|--------|
+| Transactional data | Tenant-configurable (1-7 years) | Business requirements vary | **EXAMPLE** |
+| Audit logs | Compliance-driven (1-10 years) | See retention table above | **CANDIDATE** (depends on compliance scope) |
+| Observability traces | 30-90 days (hot), 1 year (cold) | Debugging and performance analysis | **EXAMPLE** |
+| Agent execution logs | 90 days (hot), 1 year (cold) | Agent quality analysis | **EXAMPLE** |
+| Event store | Indefinite or compliance-driven | Immutable business history | **EXAMPLE** |
+| Knowledge store documents | Until explicitly deleted | Document lifecycle managed by owner | **EXAMPLE** |
+| Analytical data | Tenant-configurable | Business intelligence needs | **EXAMPLE** |
+| Session data | Until session expiry + grace period | No value after session ends | **EXAMPLE** |
+| Backups | Rolling retention (daily: 7, weekly: 4, monthly: 12) | Recovery and compliance | **EXAMPLE** |
 
 **Architectural requirement:** Retention policies must be enforced automatically. Manual retention management will drift and create compliance risk.
 
@@ -320,19 +335,19 @@ Different data types have different retention requirements:
 
 ### 3.1 Latency SLOs per API Surface
 
-Different API surfaces have different latency requirements:
+Different API surfaces have different latency requirements. All numbers below are **EXAMPLE** targets illustrating the architectural tradeoffs. Actual commitments will be determined through validation spikes and benchmarking.
 
-| API Surface | Target P50 | Target P95 | Target P99 | Rationale |
-|------------|-----------|-----------|-----------|-----------|
-| Authentication / Token validation | < 5ms | < 20ms | < 50ms | On critical path of every request |
-| Authorization check (OpenFGA) | < 5ms | < 15ms | < 30ms | On critical path of every request |
-| Policy evaluation (OPA/Cedar) | < 2ms | < 10ms | < 20ms | On critical path of every request |
-| Platform API (non-AI) | < 50ms | < 200ms | < 500ms | Standard CRUD operations |
-| Semantic query (Cube) | < 200ms | < 1s | < 3s | Depends on query complexity |
-| Agent response (streaming first token) | < 2s | < 5s | < 10s | Depends on model provider |
-| Agent response (complete) | < 10s | < 30s | < 60s | Depends on complexity and tool calls |
-| Knowledge retrieval (vector search) | < 100ms | < 300ms | < 500ms | Hybrid search with reranking |
-| Event ingestion | < 10ms | < 50ms | < 100ms | High-throughput append |
+| API Surface | Target P50 | Target P95 | Target P99 | Rationale | Status |
+|------------|-----------|-----------|-----------|-----------|--------|
+| Authentication / Token validation | < 5ms | < 20ms | < 50ms | On critical path of every request | **CANDIDATE** |
+| Authorization check (OpenFGA) | < 5ms | < 15ms | < 30ms | On critical path of every request | **CANDIDATE** |
+| Policy evaluation (OPA/Cedar) | < 2ms | < 10ms | < 20ms | On critical path of every request | **CANDIDATE** |
+| Platform API (non-AI) | < 50ms | < 200ms | < 500ms | Standard CRUD operations | **EXAMPLE** |
+| Semantic query (Cube) | < 200ms | < 1s | < 3s | Depends on query complexity | **EXAMPLE** |
+| Agent response (streaming first token) | < 2s | < 5s | < 10s | Depends on model provider | **EXAMPLE** |
+| Agent response (complete) | < 10s | < 30s | < 60s | Depends on complexity and tool calls | **EXAMPLE** |
+| Knowledge retrieval (vector search) | < 100ms | < 300ms | < 500ms | Hybrid search with reranking | **EXAMPLE** |
+| Event ingestion | < 10ms | < 50ms | < 100ms | High-throughput append | **EXAMPLE** |
 
 **Architectural implications:**
 - Synchronous call chains must be short. If auth + authz + policy + semantic query are all synchronous, latencies compound.
@@ -341,15 +356,15 @@ Different API surfaces have different latency requirements:
 
 ### 3.2 Throughput Targets
 
-**Research question:** What are the throughput targets? These depend on the deployment scale and pricing model. Example ranges:
+**Research question:** What are the throughput targets? These depend on the deployment scale and pricing model. All numbers below are **EXAMPLE** ranges showing order-of-magnitude thinking, not commitments:
 
-| Metric | Small Deployment | Medium Deployment | Large Deployment |
-|--------|-----------------|-------------------|------------------|
-| API requests/second | 100 | 1,000 | 10,000+ |
-| Concurrent agent sessions | 10 | 100 | 1,000+ |
-| Events ingested/second | 1,000 | 10,000 | 100,000+ |
-| Authorization checks/second | 500 | 5,000 | 50,000+ |
-| Model API calls/second | 10 | 100 | 1,000+ |
+| Metric | Small Deployment | Medium Deployment | Large Deployment | Status |
+|--------|-----------------|-------------------|------------------|--------|
+| API requests/second | 100 | 1,000 | 10,000+ | **EXAMPLE** |
+| Concurrent agent sessions | 10 | 100 | 1,000+ | **EXAMPLE** |
+| Events ingested/second | 1,000 | 10,000 | 100,000+ | **EXAMPLE** |
+| Authorization checks/second | 500 | 5,000 | 50,000+ | **EXAMPLE** |
+| Model API calls/second | 10 | 100 | 1,000+ | **EXAMPLE** |
 
 ### 3.3 Rate Limiting and Quotas
 

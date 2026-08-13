@@ -17,11 +17,57 @@ The platform must support multiple data ownership modes because different entiti
 
 ---
 
-## Three Data Ownership Modes
+## Separating Logical Ownership from Physical Storage
+
+The three operational modes below conflate two independent concerns if not carefully separated:
+
+1. **Who owns the truth?** (source_of_truth / logical_owner) — Which system is authoritative for this entity?
+2. **Where do the bytes live?** (physical_store / access_mode) — Where is data stored and how is it accessed?
+
+These are orthogonal. An entity can be logically owned by an external CRM but physically cached in the platform's database. An entity can be logically owned by the platform but physically stored in a customer-managed database.
+
+### Four Dimensions of Data Ownership
+
+Every entity type should declare all four dimensions:
+
+| Dimension | Question | Values |
+|-----------|----------|--------|
+| **source_of_truth** | Which system is authoritative for writes? | `platform`, `external:{system}` |
+| **logical_owner** | Which organizational entity governs this data? | `platform_operator`, `tenant`, `external_system_owner` |
+| **physical_store** | Where do the bytes physically reside? | `platform_db`, `external_only`, `platform_cache + external`, `customer_managed_db` |
+| **access_mode** | How does the platform read/write this data? | `direct`, `adapter_query`, `local_projection`, `delegated_action` |
+
+### Example: Same Logical Owner, Different Physical Arrangements
+
+```
+Entity: Customer
+  source_of_truth: external:salesforce      (CRM is authoritative)
+  logical_owner:   tenant                    (tenant's data)
+  physical_store:  platform_cache + external (projection cached locally)
+  access_mode:     local_projection (reads), delegated_action (writes)
+
+Entity: AgentMemory
+  source_of_truth: platform                  (platform is authoritative)
+  logical_owner:   tenant                    (tenant's data)
+  physical_store:  platform_db               (stored in platform)
+  access_mode:     direct                    (read/write via platform API)
+
+Entity: ComplianceAuditLog
+  source_of_truth: platform                  (platform generates it)
+  logical_owner:   platform_operator         (operator governed, tenant scoped)
+  physical_store:  customer_managed_db       (BYOK, customer-controlled storage)
+  access_mode:     direct                    (write to customer's storage)
+```
+
+---
+
+## Three Operational Modes
+
+The three operational modes describe the most common combinations of the four dimensions above. They are shorthands, not the full model.
 
 ```
                      ┌──────────────────────────────────────┐
-                     │          DATA OWNERSHIP MODES         │
+                     │         OPERATIONAL MODES             │
                      └──────────────────────────────────────┘
 
     ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
@@ -34,6 +80,8 @@ The platform must support multiple data ownership modes because different entiti
     │  owned by platform.│  │  No duplication.  │  │  Sync mechanism. │
     └──────────────────┘  └──────────────────┘  └──────────────────┘
 ```
+
+These are the **common patterns**. Edge cases (e.g., platform as source of truth but stored in customer-managed DB) exist and are handled by the four-dimension model above.
 
 ---
 
@@ -250,8 +298,10 @@ projections:
 
 | Dimension | PLATFORM-MANAGED | FEDERATED | MATERIALIZED |
 |-----------|-----------------|-----------|--------------|
-| **Source of truth** | Platform | External system | External system |
-| **Data location** | Platform DB | External system only | External system + platform cache |
+| **source_of_truth** | Platform | External system | External system |
+| **logical_owner** | Tenant (or platform) | Tenant (or external system owner) | Tenant (or external system owner) |
+| **physical_store** | Platform DB | External system only | External system + platform cache |
+| **access_mode** | Direct | Adapter query / delegated action | Local projection (reads), delegated action (writes) |
 | **Read latency** | Lowest | Highest | Low (from cache) |
 | **Write path** | Platform API | External system API | External system API (sync back) |
 | **Consistency** | Strong | Delegated (external) | Eventual |
@@ -269,12 +319,16 @@ projections:
 
 The ontology must declare the data ownership mode for every entity type. This is not optional metadata -- it determines how the platform's query engine, write path, and sync infrastructure behave for that entity.
 
-**Candidate declaration syntax in Ontology IR:**
+**Candidate declaration syntax in Ontology IR (using four-dimension model):**
 
 ```yaml
 # PLATFORM-MANAGED entity
 entity: AgentMemory
-  source_of_truth: platform
+  ownership:
+    source_of_truth: platform
+    logical_owner: tenant
+    physical_store: platform_db
+    access_mode: direct
   storage: context_graph
   properties:
     session_id: string
@@ -289,7 +343,11 @@ entity: AgentMemory
 ```yaml
 # FEDERATED entity
 entity: Customer
-  source_of_truth: external
+  ownership:
+    source_of_truth: external:salesforce
+    logical_owner: tenant
+    physical_store: external_only
+    access_mode: adapter_query (reads), delegated_action (writes)
   adapter: salesforce_rest          # registered adapter name
   mapping:
     customer.id:       CRM.Id
@@ -306,7 +364,11 @@ entity: Customer
 ```yaml
 # MATERIALIZED entity
 entity: CustomerProfile
-  source_of_truth: external
+  ownership:
+    source_of_truth: external:salesforce
+    logical_owner: tenant
+    physical_store: platform_cache + external
+    access_mode: local_projection (reads), delegated_action (writes)
   projection: materialized
   source_entity: Customer           # what this is a projection of
   adapter: salesforce_rest

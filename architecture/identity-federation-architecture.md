@@ -183,9 +183,10 @@ Human users who interact with the platform directly.
 |-----------|-------------|
 | Authentication | OIDC, SAML (via federation), MFA |
 | Provisioning | SCIM, JIT provisioning, manual |
-| Lifecycle | Hire → active → suspend → deactivate → delete |
+| Lifecycle | Create → active → suspend → deactivate → delete |
+| Membership model | A user may be a member of one or more organizations (consultant, auditor, multi-org employee). Identity exists independently of any single organization. |
 | Session model | Interactive sessions with expiry and refresh |
-| Audit identity | `user:{tenant}:{user_id}` |
+| Audit identity | `user:{user_id}` with `org:{org_id}` and `tenant:{tenant_id}` as context |
 
 ### 2. Service Account Identity
 
@@ -201,15 +202,16 @@ Non-interactive identities used by backend services, CI/CD pipelines, and integr
 
 ### 3. Agent Identity
 
-AI agents have a dual identity model — they act on behalf of a user (delegated identity) AND they have their own identity for audit and capability tracking.
+AI agents have a dual identity model — they have their own registered identity for audit and capability tracking, AND they may act on behalf of a delegating principal (user or service account) or autonomously under their own permissions.
 
 | Attribute | Description |
 |-----------|-------------|
-| Authentication | Token exchange (delegated), registered identity (own) |
-| Provisioning | Registered in agent registry with capabilities |
+| Authentication | Token exchange (delegated modes), registered identity (autonomous mode) |
+| Provisioning | Registered in agent registry with capabilities and execution mode |
 | Lifecycle | Register → deploy → version → deprecate → decommission |
-| Session model | Scoped to user session (delegated) or workflow (autonomous) |
-| Audit identity | `agent:{tenant}:{agent_id} on_behalf_of user:{tenant}:{user_id}` |
+| Execution modes | User-delegated, service-delegated, autonomous (see Three Agent Execution Modes below) |
+| Session model | Scoped to delegating session (delegated modes) or to workflow/schedule (autonomous mode) |
+| Audit identity | `agent:{tenant}:{agent_id}` with delegation chain context: `on_behalf_of {principal}` or `autonomous (owner: {owner})` |
 
 **Agent identity is the most architecturally complex identity type.** See the dedicated section below.
 
@@ -278,10 +280,10 @@ An agent operates with TWO identities simultaneously:
 │  │ Tools: [semantic_query, ...]  │  ← Registered tool access     │
 │  └──────────────────────────────┘                                │
 │                                                                   │
-│  EFFECTIVE PERMISSIONS = Intersection of:                         │
-│    jane's user permissions                                        │
-│    ∩ analytics-v2 agent capabilities                              │
-│    ∩ action-specific policy constraints                           │
+│  EFFECTIVE GOVERNANCE = Every layer must independently permit:     │
+│    ✓ jane's user permissions allow it                             │
+│    ✓ analytics-v2 agent capabilities allow it                     │
+│    ✓ action-specific policy constraints allow it                  │
 │                                                                   │
 │  AUDIT RECORD INCLUDES:                                           │
 │    who_initiated: user:acme:jane                                  │
@@ -348,25 +350,36 @@ Delegation chain in token:
 }
 ```
 
-**Critical constraint from AGENTS.md Rule 13:** Authorization Before Tool Execution. At every step in the delegation chain, the effective permissions are the **intersection** of all identities in the chain. No agent in the chain can exceed the permissions of the originating user.
+**Critical constraint from AGENTS.md Rule 13:** Authorization Before Tool Execution. At every step in the delegation chain, every applicable governance layer must independently permit the operation. No agent in the chain can exceed the permissions of the originating principal.
 
-### Autonomous Agent Identity
+### Three Agent Execution Modes
 
-Some agents operate without an active user session — scheduled tasks, background processing, event-driven agents. These agents:
+Agents operate in one of three modes, each with distinct identity and governance characteristics:
+
+**Mode 1: User-Delegated** — Agent acts on behalf of an interactive user session. The user's identity is carried via token exchange (RFC 8693). The agent cannot exceed the user's permissions.
+
+**Mode 2: Service-Delegated** — Agent acts on behalf of a service account (CI/CD pipeline, scheduled job, webhook-triggered integration). The service account's identity is the delegating principal. Same governance as user-delegated.
+
+**Mode 3: Autonomous** — Agent operates under its own registered identity without an active delegating session. Scheduled tasks, background processing, event-driven agents. These agents:
 
 - Have their own identity (not delegated)
-- Have explicitly configured permissions (not inherited from a user)
+- Have explicitly configured permissions (not inherited from a user or service account)
 - Must have bounded permissions (principle of least privilege)
-- Must be auditable to a responsible owner (the human who registered/deployed them)
+- Must be auditable to a registered human owner (the human who registered/deployed them)
+- Must have explicit approval for the autonomous mode and its permission set
 
 ```
 AUTONOMOUS AGENT IDENTITY:
     agent:acme:nightly-reconciliation-v1
-    owner: user:acme:finance-admin
-    permissions: explicitly configured, not delegated
+    mode: autonomous
+    owner: user:acme:finance-admin     (accountable human)
+    permissions: explicitly configured, reviewed, and approved
     schedule: cron-based trigger
     audit: all actions attributed to agent identity + registered owner
+    controls: permission ceiling, execution budget, kill switch
 ```
+
+**Key constraint:** Autonomous agents are NOT ungoverned. They operate under explicit, bounded permissions with a registered human owner who is accountable for the agent's actions. The platform must support periodic review of autonomous agent permissions.
 
 ---
 
@@ -799,7 +812,7 @@ All technologies below are candidates for research. None are selected. Selection
 
 ### Agent Identity
 
-4. **Agent delegation token design:** What claims should the agent delegation token carry? How deep can delegation chains go before the token becomes unwieldy or the permission intersection becomes too restrictive?
+4. **Agent delegation token design:** What claims should the agent delegation token carry? How deep can delegation chains go before the token becomes unwieldy or the layered governance checks become too restrictive?
 
 5. **Autonomous agent identity governance:** How should autonomous agents (no active user session) be governed? Who is accountable for their actions? How are their permissions reviewed and audited?
 

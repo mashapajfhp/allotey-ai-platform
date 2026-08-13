@@ -45,7 +45,53 @@ Every domain package, every product team, every integration partner, and every S
 4. **Versioned independently** -- each API surface has its own version. A breaking change to the Ontology API does not force a version bump on the Workflow API.
 5. **Least-privilege by default** -- every API call carries an authorization context. No anonymous or unscoped operations.
 6. **Observable by default** -- every API call produces a trace span. No call is invisible to the observability system.
-7. **Tenant-scoped** -- every API call is scoped to a tenant. Cross-tenant access is architecturally impossible through the API surface.
+7. **Resource-scoped** -- every API call carries an explicit scope context. Not every operation is tenant-scoped: platform administration is platform-scoped, package management is product-scoped, environment deployment is environment-scoped. The scope context determines the isolation boundary for each operation. Cross-boundary access is architecturally impossible -- a tenant-scoped call cannot read another tenant's data, a product-scoped call cannot affect another product.
+
+---
+
+## Scope Context Model
+
+Not every API call is tenant-scoped. Different operations target different levels of the hierarchy. Every request carries a `ScopeContext` that identifies the isolation boundary for that operation.
+
+### Scope Levels
+
+| Scope Level | Example Operations | Who Can Operate |
+|-------------|-------------------|-----------------|
+| **Platform** | Create/list products, platform configuration, global observability | Platform administrators |
+| **Product** | Declare packages, manage product configuration, list agents | Product administrators |
+| **Environment** | Deploy packages, promote versions, environment config | Product administrators, DevOps |
+| **Organization** | Manage users, billing, organization-level policies | Organization administrators |
+| **Tenant** | Query data, invoke agents, execute actions, run workflows | Tenant members (users, service accounts, agents) |
+| **Workspace** | Scoped views, workspace-level role assignment | Workspace leads, contributors |
+
+### ScopeContext Structure
+
+```
+ScopeContext:
+  scope_type: "platform" | "product" | "environment" | "organization" | "tenant" | "workspace"
+  scope_id: string          # the specific entity at this scope level
+  principal: IdentityContext # who is making the request (from Layer 1)
+```
+
+### Scope Resolution
+
+```
+POST /api/v1/agents/invoke
+  → ScopeContext: { scope_type: "tenant", scope_id: "tenant_xyz" }
+  → Authorization: verified against tenant membership
+
+POST /api/v1/packages/declare
+  → ScopeContext: { scope_type: "product", scope_id: "product_abc" }
+  → Authorization: verified against product admin role
+
+GET /api/v1/platform/capabilities
+  → ScopeContext: { scope_type: "platform" }
+  → Authorization: verified against platform read access
+```
+
+### Scope Narrowing, Never Widening
+
+A principal operating at a narrow scope (tenant) cannot access resources at a broader scope (product) unless they have explicit broader permissions. A principal operating at a broader scope (product admin) can narrow to a specific tenant but only for administrative operations, not for tenant-owned data access.
 
 ---
 
@@ -132,7 +178,7 @@ The Agent API governs the full agent lifecycle -- from definition and registrati
 | `getCheckpoint(invocation_id)` | Get the current agent checkpoint awaiting human review |
 | `resumeAgent(invocation_id, decision)` | Resume an agent after human decision (approve, reject, modify) |
 
-**Authorization model:** Every `invokeAgent` call carries the user's authorization context. The agent's effective permissions are the intersection of the agent's declared permissions and the invoking user's permissions. See `architecture/authorization-architecture.md`.
+**Authorization model:** Every `invokeAgent` call carries the invoking principal's authorization context. Every applicable governance layer must independently permit the operation: the principal's permissions, the agent's declared capability scope, and active tenant policies. See `architecture/authorization-architecture.md`.
 
 ---
 
@@ -988,9 +1034,9 @@ Client Request
 │  1. TLS termination                    │
 │  2. Rate limiting                      │
 │  3. Authentication (validate token)    │
-│  4. Tenant resolution                  │
+│  4. Scope resolution (ScopeContext)    │
 │  5. Authorization (check permissions)  │
-│  6. Cost/budget check                  │
+│  6. Cost/budget check (if applicable)  │
 │  7. Request validation                 │
 │  8. Trace span creation                │
 │  9. Route to capability service        │

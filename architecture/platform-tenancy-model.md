@@ -38,10 +38,13 @@ PLATFORM
 │
 └── Organization / Customer
     │
-    ├── Tenant / Workspace
+    ├── Tenant (hard isolation boundary)
+    │   │
+    │   ├── Workspace (optional subdivision — organizational, NOT isolation)
+    │   │   └── (teams, departments, projects — scoping, not security)
     │   │
     │   ├── Package Instance
-    │   │   └── (a running instance of an installed package for this tenant)
+    │   │   └── (a running instance of a deployed package for this tenant)
     │   │
     │   └── Agent Instances
     │       └── (agents executing within this tenant's boundary)
@@ -56,7 +59,7 @@ The hierarchy has two independent branches that intersect:
 - **Products** define WHAT intelligence capabilities exist (what packages are installed, what agents are available, what tools are exposed)
 - **Organizations** define WHO uses those capabilities and WHERE data boundaries are drawn
 
-A **Tenant** is the intersection point -- it represents a specific organization's isolated workspace within a specific product.
+A **Tenant** is the intersection point -- it represents a specific organization's isolated data and execution boundary within a specific product environment. A **Workspace** is an optional subdivision within a tenant for organizational purposes (teams, departments, projects) -- it provides scoping but NOT a security boundary.
 
 ---
 
@@ -150,30 +153,61 @@ An enterprise customer of the platform. An organization is a billing, contractua
 
 ---
 
-### 5. Tenant / Workspace
+### 5. Tenant
 
-An isolated data boundary within a product for an organization. The tenant is the intersection of an organization and a product environment.
+A hard isolation boundary within a product for an organization. The tenant is the intersection of an organization and a product environment.
 
-**Scope:** A tenant is the finest-grained isolation boundary for data at rest and data in motion.
+**Scope:** A tenant is the hardest isolation boundary for data at rest and data in motion.
 
 **Responsibilities:**
 - Data isolation (all data stored for this tenant is accessible only to this tenant)
 - Package instance lifecycle (domain packages are instantiated per tenant)
 - Tenant-level configuration (custom settings, feature flags, overrides)
-- Tenant-level authorization (which users have which roles within this workspace)
+- Tenant-level authorization (which users have which roles within this tenant)
 - Cost tracking (metering and budget enforcement scoped to this tenant)
 - Agent execution boundary (agents executing in this tenant can only access this tenant's data)
 
-**Cardinality:** One tenant per (organization, product, environment) triple. An organization using three products in production has three tenants.
-
-**Formal identity:**
-```
-tenant_id = f(organization_id, product_id, environment_id)
-```
+**Cardinality:** An organization may have one or more tenants per product environment. This is not constrained to exactly one -- a large enterprise might create multiple tenants in the same product for regulatory, geographic, or organizational separation.
 
 **Isolation guarantee:** Tenants are the hardest isolation boundary in the system. Every data path, every query, every agent execution, every tool invocation must respect tenant boundaries. Cross-tenant data leakage is a critical security failure (per AGENTS.md rule 9).
 
-**Why "Workspace" is an acceptable alias:** Some products may present tenants as "workspaces" or "projects" in their UI. The underlying isolation model is the same regardless of the user-facing terminology.
+**Key distinction:** A tenant is a **security and data boundary**, not a UI concept. Products may present tenants using their own terminology ("workspace," "project," "environment"), but the underlying isolation enforcement is the same regardless of product-level naming.
+
+---
+
+### 5a. Workspace
+
+An optional organizational subdivision within a tenant. Workspaces provide **scoping**, not isolation.
+
+**Scope:** A workspace exists within a tenant and groups users, agents, and resources for organizational convenience.
+
+**What a workspace provides:**
+- Grouping of users into teams, departments, or projects
+- Scoped views and dashboards (users see their workspace's items by default)
+- Resource tagging and filtering (agents, documents, workflows assigned to a workspace)
+- Workspace-level roles (team lead, contributor) as a refinement of tenant-level roles
+- Optional budget sub-allocation within the tenant's budget
+
+**What a workspace does NOT provide:**
+- Data isolation. All data in all workspaces within a tenant is in the same isolation boundary. A user with sufficient tenant-level permissions can access data across workspaces.
+- Separate authorization models. Workspace roles refine tenant roles but cannot override them.
+- Independent package configuration. Packages are instantiated at the tenant level, not the workspace level.
+
+**Cardinality:** A tenant has zero or more workspaces. Not every product needs workspaces -- simpler products operate with tenants alone.
+
+**Example:**
+```
+Tenant: Org X in Product A (prod)
+    ├── Workspace: Engineering
+    │   └── Users: alice, bob (role: contributor)
+    │   └── Agents scoped here: code-review-agent
+    ├── Workspace: Finance
+    │   └── Users: carol, dave (role: contributor)
+    │   └── Agents scoped here: expense-analysis-agent
+    └── (Tenant-level admins can see all workspaces)
+```
+
+**Key principle:** The workspace is a **product-level UX concept** that the platform supports, not a platform-level security boundary. The platform enforces tenant isolation; the product decides whether and how to subdivide tenants into workspaces.
 
 ---
 
@@ -181,26 +215,30 @@ tenant_id = f(organization_id, product_id, environment_id)
 
 A human identity that interacts with the platform through one or more products.
 
-**Scope:** A user is an identity that belongs to an organization and is granted access to specific tenants.
+**Scope:** A user is an identity (a principal) with explicit memberships in one or more organizations. Identity exists independently of any single organization.
 
 **Responsibilities:**
-- Authenticates via the organization's identity provider
-- Holds roles and permissions within specific tenants
-- Initiates agent sessions (agents inherit the user's effective permissions)
+- Authenticates via an identity provider (which may be org-specific or platform-level)
+- Holds explicit memberships in organizations
+- Holds roles and permissions within specific tenants (via organization membership)
+- Initiates agent sessions (agents execute under the user's effective governance context)
 - Owns audit trail of all actions performed
 - Has personal preferences and settings scoped to each tenant
 
-**Cardinality:** A user belongs to exactly one organization. A user may have access to multiple tenants (across products and environments).
+**Cardinality:** A user may be a member of one or more organizations. A user may have access to tenants across multiple organizations (e.g., a consultant working for two clients, an auditor reviewing multiple organizations, a user whose company has subsidiaries).
 
 **Identity model:**
 ```
-User (org-level identity)
-  ├── Tenant A membership (roles, permissions)
-  ├── Tenant B membership (roles, permissions)
-  └── Tenant C membership (roles, permissions)
+User: alice@consulting.com (platform-level identity)
+  ├── Membership: Organization A (role: consultant)
+  │   ├── Tenant A1 (roles: analyst)
+  │   └── Tenant A2 (roles: viewer)
+  ├── Membership: Organization B (role: auditor)
+  │   └── Tenant B1 (roles: auditor)
+  └── (identity persists even if all memberships are revoked)
 ```
 
-**Key principle:** A user's identity is managed at the organization level. Their authorization is managed at the tenant level. Authentication is universal; authorization is local.
+**Key principle:** A user's identity is managed at the platform level. Their organization memberships are explicit grants. Their authorization within each tenant is resolved through their membership chain. Authentication is universal; membership is explicit; authorization is local.
 
 ---
 
@@ -236,54 +274,122 @@ An AI agent identity. Agents are not users or service accounts -- they are a thi
 - Bounded by its own declared permission scope (an agent cannot exceed its own declared capabilities even if the user has broader permissions)
 - Produces audit records for every action
 
+**Three Agent Execution Modes:**
+
+| Mode | Description | Permission Source | Audit Attribution |
+|------|-------------|-------------------|-------------------|
+| **User-delegated** | Agent acts on behalf of an interactive user session | User's permissions + agent's declared scope + active policies — every layer must independently permit | `user:alice → agent:analytics-v2` |
+| **Service-delegated** | Agent acts on behalf of a service account (CI/CD, scheduled job, integration) | Service account's permissions + agent's declared scope + active policies — every layer must independently permit | `service:pipeline-sa → agent:reconciler-v1` |
+| **Autonomous** | Agent operates under its own registered identity with explicitly configured permissions, no active delegating session | Agent's own explicit permissions + active policies — bounded by principle of least privilege, accountable to a registered human owner | `agent:nightly-audit-v1 (owner: user:finance-admin)` |
+
 **Effective permission model:**
 ```
-Effective agent permissions =
-    Delegating principal's permissions (user or service account)
-    INTERSECT
-    Agent's declared permission scope
-    INTERSECT
-    Tenant's active policies
+For user-delegated / service-delegated:
+  Every applicable governance layer must independently permit the operation:
+    1. Delegating principal's permissions allow it
+    2. Agent's declared capability scope allows it
+    3. Tenant's active policies allow it
+    4. Domain constraints are satisfied
+
+For autonomous:
+  Every applicable governance layer must independently permit the operation:
+    1. Agent's explicitly configured permissions allow it
+    2. Tenant's active policies allow it
+    3. Domain constraints are satisfied
+    4. Agent's owner is identifiable for accountability
 ```
 
 **Cardinality:** An agent type is defined once (in a domain package). Agent instances execute per-session within a tenant. Multiple users in the same tenant may use the same agent type simultaneously, but each session is isolated.
 
-**Key principle:** Agents are never autonomous -- they always act on behalf of a principal, and their effective permissions are the intersection (not the union) of the principal's permissions and the agent's own capability declarations.
+**Key principles:**
+- In delegated modes, the agent cannot exceed the delegating principal's permissions — the governance layers do not produce a union.
+- In autonomous mode, the agent has explicitly configured permissions subject to review and audit. The registered owner is accountable for the agent's actions.
+- All three modes produce full audit trails with the delegation chain (or lack thereof) clearly recorded.
 
 ---
 
-### 9. Package Installation
+### 9. Package Artifact
 
-A domain package installed for a specific product. This makes the package's capabilities available to the product but does not activate them for any tenant.
+A versioned, validated, signed domain package stored in the platform's package registry. An artifact is the immutable unit of distribution -- the published output of a package author.
 
-**Scope:** A package installation exists at the product level.
+**Scope:** A package artifact exists at the platform level. It is available for declaration by any product.
 
 **Responsibilities:**
-- Registers the package's artifacts (ontology definitions, semantic models, agent definitions, tool definitions, workflow definitions, policies, connectors, evaluation criteria)
-- Validates compatibility with the platform version and other installed packages
-- Makes the package available for tenant-level instantiation
-- Manages package versioning and upgrade paths
+- Stores the validated, signed package bundle (ontology definitions, semantic models, agent definitions, tool definitions, workflow definitions, policies, connectors, evaluation criteria)
+- Supply-chain metadata (signature, publisher identity, SBOM, capability declarations)
+- Version history and changelog
+- Compatibility metadata (minimum platform API version, required capabilities)
 
-**Cardinality:** A product may have multiple packages installed. A package may be installed across multiple products (but each installation is independent).
+**Cardinality:** The platform registry holds many artifacts. Each artifact is immutable once published.
 
 **Lifecycle:**
 ```
-INSTALL (product-level)
-    → Package artifacts registered
-    → Compatibility validated
+PUBLISH (author → platform registry)
+    → Package validated against schema
+    → Supply-chain security checks (signature, SBOM, capabilities)
+    → Artifact stored in registry
+    → Available for product declaration
+```
+
+---
+
+### 10. Product Declaration
+
+A product's explicit decision to use a specific package artifact. The declaration makes the package's capabilities part of the product's definition but does not deploy anything to any environment.
+
+**Scope:** A product declaration exists at the product level.
+
+**Responsibilities:**
+- Declares which package artifacts (and versions) the product uses
+- Validates compatibility with other declared packages (dependency resolution)
+- Defines product-level configuration overrides for the package
+- Gates which package versions are available for environment deployment
+
+**Cardinality:** A product may declare multiple packages. A package artifact may be declared by multiple products (independently).
+
+**Lifecycle:**
+```
+DECLARE (product-level)
+    → Package artifact referenced from registry
+    → Compatibility with other declared packages validated
+    → Product-level configuration specified
+    → Available for environment deployment
+    → NOT yet deployed to any environment
+```
+
+---
+
+### 11. Environment Deployment
+
+A declared package deployed into a specific product environment (dev, staging, prod). This is where compiled artifacts (database schemas, authorization models, semantic models) are materialized for a specific environment.
+
+**Scope:** An environment deployment exists at the product-environment level.
+
+**Responsibilities:**
+- Compiles package artifacts for the target environment (IR compilation, adapter resolution)
+- Runs environment-specific validation (e.g., staging smoke tests before prod)
+- Manages version promotion across environments (dev → staging → prod)
+- Applies environment-specific configuration (model routing, rate limits, connector endpoints)
+
+**Cardinality:** Each declared package may be deployed to multiple environments. Different environments may run different versions (e.g., v2.1 in staging, v2.0 in prod).
+
+**Lifecycle:**
+```
+DEPLOY (environment-level)
+    → Package compiled for target environment
+    → Environment-specific adapters configured
+    → Artifacts materialized (schemas, authorization models ready)
     → Available for tenant instantiation
     → NOT yet active for any tenant
 ```
 
-**Key distinction from Package Instance:** An installation makes capabilities available. An instance activates them for a specific tenant with tenant-specific data and configuration.
-
 ---
 
-### 10. Package Instance
+### 12. Package Instance
 
-A running instance of an installed domain package, activated for a specific tenant.
+A running instance of an environment-deployed package, activated for a specific tenant within that environment.
 
-**Scope:** A package instance exists at the tenant level.
+**Scope:** A package instance exists at the tenant level within an environment.
 
 **Responsibilities:**
 - Tenant-specific data schemas deployed (database tables, graph schemas, vector collections)
@@ -293,19 +399,29 @@ A running instance of an installed domain package, activated for a specific tena
 - Tools registered and authorized for this tenant
 - Evaluation criteria active for quality monitoring
 
-**Cardinality:** Each tenant may have multiple package instances (one per installed package they activate). Each package instance belongs to exactly one tenant.
+**Cardinality:** Each tenant may have multiple package instances (one per deployed package they activate). Each package instance belongs to exactly one tenant.
 
 **Lifecycle:**
 ```
 INSTANTIATE (tenant-level)
-    → Schema migrations run for this tenant
+    → Schema migrations run for this tenant's data boundary
     → Authorization tuples created for this tenant
-    → Configuration applied
+    → Tenant-specific configuration applied
     → Agents and tools activated
     → Monitoring and evaluation started
 ```
 
-**Key distinction from Package Installation:** The installation is the blueprint. The instance is the live, tenant-specific deployment of that blueprint with tenant-specific data, configuration, and access control.
+### Package Lifecycle Summary
+
+```
+ARTIFACT                    DECLARATION               DEPLOYMENT               INSTANCE
+(platform registry)    →    (product-level)      →    (environment-level)  →   (tenant-level)
+
+Immutable, signed,          "Product X uses            "Deploy v2.1 to          "Activate for
+validated bundle.           package Y v2.x"            staging env"             Org Z's tenant"
+
+Author publishes.           Product team declares.     DevOps promotes.         Tenant admin activates.
+```
 
 ---
 
@@ -321,23 +437,25 @@ INSTANTIATE (tenant-level)
 │  │  ┌──────────────────────┐  ┌──────────────────────┐                │ │
 │  │  │ Environment: prod    │  │ Environment: prod     │                │ │
 │  │  │                      │  │                       │                │ │
-│  │  │  ┌────────────────┐  │  │  ┌─────────────────┐  │                │ │
-│  │  │  │ Tenant: Org X  │  │  │  │ Tenant: Org X   │  │                │ │
-│  │  │  │  in Prod A     │  │  │  │  in Prod B      │  │                │ │
-│  │  │  │                │  │  │  │                  │  │                │ │
-│  │  │  │  Pkg Instance  │  │  │  │  Pkg Instance    │  │                │ │
-│  │  │  │  Agent sessions│  │  │  │  Agent sessions  │  │                │ │
-│  │  │  │  Data boundary │  │  │  │  Data boundary   │  │                │ │
-│  │  │  └────────────────┘  │  │  └─────────────────┘  │                │ │
+│  │  │  ┌──────────────────┐│  │  ┌──────────────────┐│                │ │
+│  │  │  │ Tenant: Org X    ││  │  │ Tenant: Org X    ││                │ │
+│  │  │  │  in Prod A       ││  │  │  in Prod B       ││                │ │
+│  │  │  │                  ││  │  │                   ││                │ │
+│  │  │  │  Pkg Instance    ││  │  │  Pkg Instance     ││                │ │
+│  │  │  │  Agent sessions  ││  │  │  Agent sessions   ││                │ │
+│  │  │  │  Data boundary   ││  │  │  Data boundary    ││                │ │
+│  │  │  │  [Workspace: Eng]││  │  │  [Workspace: HR]  ││                │ │
+│  │  │  │  [Workspace: Fin]││  │  │  (optional)       ││                │ │
+│  │  │  └──────────────────┘│  │  └──────────────────┘│                │ │
 │  │  │                      │  │                       │                │ │
-│  │  │  ┌────────────────┐  │  │  ┌─────────────────┐  │                │ │
-│  │  │  │ Tenant: Org Y  │  │  │  │ Tenant: Org Y   │  │                │ │
-│  │  │  │  in Prod A     │  │  │  │  in Prod B      │  │                │ │
-│  │  │  │                │  │  │  │                  │  │                │ │
-│  │  │  │  Pkg Instance  │  │  │  │  Pkg Instance    │  │                │ │
-│  │  │  │  Agent sessions│  │  │  │  Agent sessions  │  │                │ │
-│  │  │  │  Data boundary │  │  │  │  Data boundary   │  │                │ │
-│  │  │  └────────────────┘  │  │  └─────────────────┘  │                │ │
+│  │  │  ┌──────────────────┐│  │  ┌──────────────────┐│                │ │
+│  │  │  │ Tenant: Org Y    ││  │  │ Tenant: Org Y    ││                │ │
+│  │  │  │  in Prod A       ││  │  │  in Prod B       ││                │ │
+│  │  │  │                  ││  │  │                   ││                │ │
+│  │  │  │  Pkg Instance    ││  │  │  Pkg Instance     ││                │ │
+│  │  │  │  Agent sessions  ││  │  │  Agent sessions   ││                │ │
+│  │  │  │  Data boundary   ││  │  │  Data boundary    ││                │ │
+│  │  │  └──────────────────┘│  │  └──────────────────┘│                │ │
 │  │  └──────────────────────┘  └──────────────────────┘                │ │
 │  │                                                                     │ │
 │  │  Installed Packages:           Installed Packages:                  │ │
@@ -603,13 +721,20 @@ type tenant
     define member: [user, service_account] or member from organization
     define viewer: [user, service_account] or member
 
+type workspace
+  relations
+    define tenant: [tenant]
+    define lead: [user, service_account]
+    define contributor: [user, service_account]
+    define viewer: [user, service_account] or contributor
+
 type user
   relations
-    define belongs_to: [organization]
+    define member_of: [organization]   # a user may be a member of multiple orgs
 
 type service_account
   relations
-    define belongs_to: [organization]
+    define member_of: [organization]   # membership, not ownership
     define scoped_to: [tenant]
 
 type agent
@@ -640,12 +765,16 @@ type package_instance
 | Is this user an org admin? | `Check(user:alice, admin, organization:orgx)` |
 | Can this user manage packages for this product? | `Check(user:alice, admin, product:prodA)` |
 
-### Tenant Isolation Enforcement
+### Scope-Based Isolation Enforcement
 
-Every data query, every agent execution, and every tool invocation includes a mandatory tenant context. The authorization system enforces that the requesting principal has a valid relationship to the tenant in the request context.
+Every API call carries a `ScopeContext` (see `architecture/platform-api-architecture.md`). The scope determines the isolation boundary:
+
+- **Tenant-scoped operations** (data queries, agent invocations, tool calls) enforce that the principal is a member of the target tenant
+- **Product-scoped operations** (package declaration, agent registration) enforce product admin permissions
+- **Platform-scoped operations** (product creation, platform config) enforce platform admin permissions
 
 ```
-Request: { principal: user:alice, tenant: tenant:orgx-prodA-prod, action: query, resource: ... }
+Request: { principal: user:alice, scope: tenant:orgx-prodA-prod, action: query, resource: ... }
 
 Authorization check sequence:
   1. Is alice a member of tenant orgx-prodA-prod? (ReBAC check)
@@ -658,23 +787,34 @@ Authorization check sequence:
 
 ## Mapping to the Domain Package System
 
-Domain packages interact with the tenancy model at two levels:
+Domain packages interact with the tenancy model at four levels:
 
-### Level 1: Package Installation (Product-Scoped)
+### Level 1: Artifact (Platform Registry)
 
-When a domain package is installed for a product:
-- The package's artifacts are registered in the product's namespace
-- Ontology definitions are compiled and made available
-- Agent definitions are registered in the product's agent registry
-- Tool definitions are registered in the product's tool registry
-- Semantic models are compiled and available for tenant instantiation
+Package author publishes a validated, signed artifact to the platform registry. The artifact is immutable and available to any product.
+
+### Level 2: Product Declaration (Product-Scoped)
+
+Product team declares that their product uses a specific package artifact:
+- The package's ontology definitions, agent definitions, and tool definitions become part of the product's capability set
 - Authorization model extensions are merged into the product's authorization model
+- Dependency compatibility with other declared packages is validated
 
-Installation does NOT create any data stores, does NOT activate any agents, and does NOT affect any existing tenant.
+Declaration does NOT compile anything, does NOT create any data stores, and does NOT affect any environment or tenant.
 
-### Level 2: Package Instantiation (Tenant-Scoped)
+### Level 3: Environment Deployment (Environment-Scoped)
 
-When a tenant activates an installed package:
+DevOps deploys a declared package to a specific environment:
+- Package artifacts are compiled for the target environment (IR compilation, adapter configuration)
+- Environment-specific connector endpoints and model routing configured
+- Compiled schemas, authorization models, and semantic models materialized
+- Available for tenant instantiation within this environment
+
+Deployment does NOT create tenant-specific data stores or activate agents for any tenant.
+
+### Level 4: Package Instantiation (Tenant-Scoped)
+
+Tenant admin activates a deployed package for their tenant:
 - Database schema migrations run for this tenant's data boundary
 - Tenant-specific authorization tuples are created (e.g., default roles, permissions)
 - Tenant-specific configuration is applied
@@ -683,25 +823,28 @@ When a tenant activates an installed package:
 - Connectors are configured with tenant-specific credentials
 
 ```
-Product A has package "supply-chain" installed (Level 1)
+Platform Registry: supply-chain v2.1 (Artifact)
     │
-    ├── Tenant: Org X in Product A
-    │   └── Package Instance: supply-chain for Org X
-    │       ├── Org X's supply chain data (isolated)
-    │       ├── Org X's supply chain agent sessions (isolated)
-    │       └── Org X's supply chain configuration
-    │
-    └── Tenant: Org Y in Product A
-        └── Package Instance: supply-chain for Org Y
-            ├── Org Y's supply chain data (isolated)
-            ├── Org Y's supply chain agent sessions (isolated)
-            └── Org Y's supply chain configuration
+    └── Product A declares supply-chain v2.x (Declaration)
+        │
+        ├── Prod environment: supply-chain v2.1 deployed (Deployment)
+        │   ├── Tenant: Org X → Package Instance (supply-chain for Org X)
+        │   │   ├── Org X's supply chain data (isolated)
+        │   │   ├── Org X's supply chain agent sessions (isolated)
+        │   │   └── Org X's supply chain configuration
+        │   └── Tenant: Org Y → Package Instance (supply-chain for Org Y)
+        │       ├── Org Y's supply chain data (isolated)
+        │       └── Org Y's supply chain configuration
+        │
+        └── Staging environment: supply-chain v2.2 deployed (Deployment)
+            └── Tenant: Org X staging → Package Instance (testing v2.2)
 ```
 
 ### Package Dependency Resolution
 
-Package dependencies are resolved at the product level (installation), not the tenant level (instantiation). If Package B depends on Package A:
-- Package A must be installed in the product before Package B can be installed
+Package dependencies are resolved at the declaration level (product-scoped), not the instantiation level (tenant-scoped). If Package B depends on Package A:
+- Package A must be declared in the product before Package B can be declared
+- When deploying to an environment, both packages are deployed together
 - When a tenant activates Package B, the system ensures Package A is also instantiated for that tenant
 - The dependency is declared in the package manifest and enforced by the platform
 

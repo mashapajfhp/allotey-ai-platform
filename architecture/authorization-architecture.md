@@ -23,16 +23,17 @@ When an agent acts on behalf of a user, it inherits the user's permissions:
 - "Agent acting as Jane can only see Region A orders"
 - "Agent acting as a Manager can approve up to $5,000"
 
-The intersection of these three layers determines what actually happens:
+Every applicable governance layer must independently permit the operation:
 
 ```
-Effective permissions =
-    User permissions
-    ∩ Agent permissions
-    ∩ Action-specific constraints
+For an agent action to proceed:
+    ✓ User/principal permissions allow it
+    ✓ Agent's declared capability scope allows it
+    ✓ Action-specific policy constraints allow it
+    ✓ Domain constraints are satisfied
 ```
 
-An agent never has MORE permission than the user it represents.
+An agent never exceeds the permissions of the delegating principal (in delegated modes) or its own explicit permission ceiling (in autonomous mode).
 
 ## Zanzibar Model (ReBAC)
 
