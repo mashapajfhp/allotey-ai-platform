@@ -254,42 +254,53 @@ These identities are:
 
 Agent identity is the most novel and architecturally significant identity challenge in an AI platform. Traditional identity systems were built for humans and services — agents are neither.
 
-### The Dual Identity Model
+### Agent Identity Model
 
-An agent operates with TWO identities simultaneously:
+Every agent always has its own registered identity. In delegated execution modes, the agent additionally carries a delegating principal identity.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  AGENT EXECUTION CONTEXT                                         │
+EVERY AGENT HAS:
+┌──────────────────────────────────────────────────────────────────┐
+│  AGENT OWN IDENTITY              "Who the agent IS"              │
 │                                                                   │
-│  ┌──────────────────────────────┐                                │
-│  │ DELEGATED USER IDENTITY      │  "Who the agent acts for"      │
-│  │                              │                                │
-│  │ user:acme:jane               │  ← From token exchange         │
-│  │ Permissions: jane's perms    │  ← Inherited, never exceeded   │
-│  │ Tenant: acme                 │  ← Jane's tenant scope         │
-│  │ Session: session_abc123      │  ← Bound to jane's session     │
-│  └──────────────────────────────┘                                │
+│  agent:acme:analytics-v2         ← Registered identity            │
+│  Capabilities: [query, chart]    ← What this agent type can do    │
+│  Version: 2.3.1                  ← For audit and rollback         │
+│  Tools: [semantic_query, ...]    ← Registered tool access         │
+└──────────────────────────────────────────────────────────────────┘
+
+DELEGATED MODES ADDITIONALLY CARRY:
+┌──────────────────────────────────────────────────────────────────┐
+│  DELEGATING PRINCIPAL IDENTITY   "Who the agent acts for"        │
 │                                                                   │
-│  ┌──────────────────────────────┐                                │
-│  │ AGENT OWN IDENTITY           │  "Who the agent IS"            │
-│  │                              │                                │
-│  │ agent:acme:analytics-v2      │  ← Registered identity         │
-│  │ Capabilities: [query, chart] │  ← What this agent type can do │
-│  │ Version: 2.3.1               │  ← For audit and rollback      │
-│  │ Tools: [semantic_query, ...]  │  ← Registered tool access     │
-│  └──────────────────────────────┘                                │
-│                                                                   │
-│  EFFECTIVE GOVERNANCE = Every layer must independently permit:     │
-│    ✓ jane's user permissions allow it                             │
-│    ✓ analytics-v2 agent capabilities allow it                     │
-│    ✓ action-specific policy constraints allow it                  │
-│                                                                   │
-│  AUDIT RECORD INCLUDES:                                           │
-│    who_initiated: user:acme:jane                                  │
-│    who_executed: agent:acme:analytics-v2                           │
-│    delegation_chain: [user:acme:jane → agent:acme:analytics-v2]   │
-└─────────────────────────────────────────────────────────────────┘
+│  user:acme:jane                  ← From token exchange            │
+│  Permissions: jane's perms       ← Governance ceiling             │
+│  Tenant: acme                    ← Jane's tenant scope            │
+│  Session: session_abc123         ← Bound to jane's session        │
+└──────────────────────────────────────────────────────────────────┘
+
+AUTONOMOUS MODE HAS NO DELEGATING PRINCIPAL:
+┌──────────────────────────────────────────────────────────────────┐
+│  agent:acme:nightly-audit-v1     ← Own identity                   │
+│  owner: user:acme:finance-admin  ← Accountable human (metadata)   │
+│  permissions: explicitly config. ← NOT inherited from owner       │
+│  The owner is accountable but is NOT the runtime principal.       │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Per-mode governance:**
+
+```
+DELEGATED (user or service):
+  ✓ Delegating principal's permissions allow it
+  ✓ Agent's declared capability scope allows it
+  ✓ Action-specific policy constraints allow it
+  Audit: principal → agent (delegation chain recorded)
+
+AUTONOMOUS:
+  ✓ Agent's explicitly configured permissions allow it
+  ✓ Action-specific policy constraints allow it
+  Audit: agent (owner recorded for accountability)
 ```
 
 ### Agent Delegation via Token Exchange
@@ -427,6 +438,87 @@ User authenticates via federated IdP (first time)
 ```
 
 **Architectural consideration:** JIT provisioning must also create the user in OpenFGA (authorization tuples) and any other systems that need to know about the user.
+
+---
+
+## External Identity and Account Linking
+
+### The Problem: Identity Collision
+
+The platform supports multi-organization membership. A user may authenticate through different identity providers for different organizations:
+
+```
+Organization A IdP (Entra/Azure AD)
+    sub = 78291
+    email = jane@example.com
+
+Organization B IdP (Okta)
+    sub = AABB3
+    email = jane@example.com
+```
+
+**Are these the same person?** The platform must NEVER assume yes based solely on email. Email addresses can be:
+- Reassigned (employee leaves, new employee gets the same address)
+- Spoofed (in misconfigured IdPs)
+- Shared (service mailboxes)
+- Subject to domain takeover attacks
+
+### Canonical External Identity Key
+
+External identities are anchored to the authoritative `issuer + subject` pair, not to email:
+
+```
+ExternalIdentity:
+    issuer:        "https://login.microsoftonline.com/org-a-tenant"
+    subject:       "78291"
+    provider_type: "oidc"
+    email_hint:    "jane@example.com"    (informational, NOT authoritative)
+    linked_to:     principal:p_123       (explicit, verified link)
+```
+
+### Principal and External Identity Model
+
+A platform principal (the canonical identity) can have multiple external identities explicitly linked to it:
+
+```
+Principal: p_123 (canonical platform identity)
+    │
+    ├── ExternalIdentity: Entra Org A / sub 78291
+    │   └── linked_at: 2025-01-15, link_method: first_login_jit
+    │
+    ├── ExternalIdentity: Okta Org B / sub 4721
+    │   └── linked_at: 2025-03-22, link_method: admin_verified
+    │
+    └── ExternalIdentity: platform passkey / credential X
+        └── linked_at: 2025-01-15, link_method: self_registered
+```
+
+### Account Linking Rules
+
+| Rule | Rationale |
+|------|-----------|
+| **Never auto-merge on email alone** | Email is not a stable, unique, verified identity key |
+| **Issuer + subject is authoritative** | This is the identity assertion the IdP signs |
+| **Explicit linking required** | Admin verification, self-service verification flow, or SCIM correlation |
+| **Link is auditable** | Who linked, when, by what method |
+| **Unlinking must be supported** | If a link was made in error, it must be reversible |
+| **Orphaned externals create new principals** | If no link exists, a new principal is created (JIT) |
+
+### Account Linking Methods
+
+| Method | Trust Level | Use Case |
+|--------|-------------|----------|
+| **JIT first-login** | Low | New user from a trusted IdP; creates new principal unless admin pre-linked |
+| **SCIM correlation** | Medium | HR system pre-provisions user with external identity mapping |
+| **Admin-verified** | High | Platform or org admin explicitly links two external identities to one principal |
+| **Self-service verification** | Medium | User proves ownership of second identity (e.g., by authenticating through both IdPs) |
+
+### Research Questions (Account Linking)
+
+1. **Identity collision detection:** How does the platform detect when two external identities might represent the same person? What heuristics are safe (e.g., SCIM employee ID match) vs. unsafe (email match)?
+2. **IdP migration:** When an organization migrates from one IdP to another (e.g., ADFS to Entra), how are existing external identities remapped to the new issuer+subject?
+3. **Domain takeover protection:** If an attacker gains control of a domain (e.g., registers an expired corporate domain), how does the platform prevent them from impersonating users via email-based linking?
+4. **Duplicate principal reconciliation:** If two principals are created for the same human (due to separate JIT provisioning from different orgs), what is the merge/reconciliation process? What happens to audit trails?
 
 ---
 

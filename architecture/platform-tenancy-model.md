@@ -40,8 +40,8 @@ PLATFORM
     │
     ├── Tenant (hard isolation boundary)
     │   │
-    │   ├── Workspace (optional subdivision — organizational, NOT isolation)
-    │   │   └── (teams, departments, projects — scoping, not security)
+    │   ├── Workspace (optional logical authorization boundary — NOT infrastructure isolation)
+    │   │   └── (teams, departments, projects — authorization scoping, not data-plane isolation)
     │   │
     │   ├── Package Instance
     │   │   └── (a running instance of a deployed package for this tenant)
@@ -59,7 +59,7 @@ The hierarchy has two independent branches that intersect:
 - **Products** define WHAT intelligence capabilities exist (what packages are installed, what agents are available, what tools are exposed)
 - **Organizations** define WHO uses those capabilities and WHERE data boundaries are drawn
 
-A **Tenant** is the intersection point -- it represents a specific organization's isolated data and execution boundary within a specific product environment. A **Workspace** is an optional subdivision within a tenant for organizational purposes (teams, departments, projects) -- it provides scoping but NOT a security boundary.
+A **Tenant** is the intersection point -- it represents a specific organization's isolated data and execution boundary within a specific product environment. A **Workspace** is an optional logical authorization boundary within a tenant -- it is not a hard infrastructure isolation boundary (no separate database, encryption key, or vector collection), but authorization can enforce workspace-level access control according to product policy.
 
 ---
 
@@ -189,9 +189,12 @@ An optional organizational subdivision within a tenant. Workspaces provide **sco
 - Optional budget sub-allocation within the tenant's budget
 
 **What a workspace does NOT provide:**
-- Data isolation. All data in all workspaces within a tenant is in the same isolation boundary. A user with sufficient tenant-level permissions can access data across workspaces.
-- Separate authorization models. Workspace roles refine tenant roles but cannot override them.
+- Hard infrastructure isolation. All data in all workspaces within a tenant shares the same database, encryption keys, and vector collections. There is no data-plane separation between workspaces.
 - Independent package configuration. Packages are instantiated at the tenant level, not the workspace level.
+
+**What a workspace CAN provide (product-defined):**
+- Logical authorization boundaries. A product can configure workspace-level access control so that an Engineering contributor cannot read Finance workspace resources, even though both live in the same tenant's data boundary.
+- Workspace roles refine tenant roles but cannot override them. A workspace-level permission cannot grant access that the tenant-level model denies.
 
 **Cardinality:** A tenant has zero or more workspaces. Not every product needs workspaces -- simpler products operate with tenants alone.
 
@@ -207,7 +210,7 @@ Tenant: Org X in Product A (prod)
     └── (Tenant-level admins can see all workspaces)
 ```
 
-**Key principle:** The workspace is a **product-level UX concept** that the platform supports, not a platform-level security boundary. The platform enforces tenant isolation; the product decides whether and how to subdivide tenants into workspaces.
+**Key principle:** The workspace is a **logical authorization boundary**, not a hard infrastructure isolation boundary. The platform enforces tenant-level data-plane isolation. The product decides whether and how to subdivide tenants into workspaces and whether workspace-level authorization is enforced.
 
 ---
 

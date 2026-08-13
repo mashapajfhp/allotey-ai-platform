@@ -9,6 +9,8 @@ The Stable Platform API is the contract between the Product/Domain layer and the
 
 Every domain package, every product team, every integration partner, and every SDK interacts with the platform exclusively through this API surface. If this API is wrong, the entire architecture collapses. If it is right, the platform can evolve independently from every product built on it.
 
+> **CRITICAL: These are logical capability contracts, not deployment boundaries.** Multiple capability APIs may be implemented within the same process or deployable unit. Service extraction requires an independent scaling, security, reliability, ownership, or deployment justification. Do not interpret the 14 capability contracts below as 14 microservices. See `AGENTS.md` Rule 16 (No Premature Microservices).
+
 ```
 ┌─────────────────────────────────────────────────┐
 │              PRODUCT / DOMAIN LAYER             │
@@ -88,6 +90,26 @@ GET /api/v1/platform/capabilities
   → ScopeContext: { scope_type: "platform" }
   → Authorization: verified against platform read access
 ```
+
+### Server-Side Scope Resolution
+
+The caller supplies a `scope_id`. The platform resolves the full resource ancestry server-side from authoritative relationships. **The caller never asserts the parent hierarchy.**
+
+```
+Request supplies:
+    scope_id: tenant_xyz
+
+Platform resolves authoritative ScopePath:
+    platform_1
+    └── product_4
+        └── environment_prod
+            └── organization_7
+                └── tenant_xyz
+
+Authorization operates against this resolved path.
+```
+
+This prevents confused-deputy attacks where a caller supplies identifiers from different resource trees. The `scope_id` is the only caller-supplied scope value; everything above it is derived from the platform's own resource graph.
 
 ### Scope Narrowing, Never Widening
 
