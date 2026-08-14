@@ -3,7 +3,7 @@
  *
  * Models three agent patterns:
  * 1. User-delegated: scheduling_agent acts on behalf of patient_jones
- * 2. Service-delegated: structurally identical, one test suffices
+ * 2. Service-delegated: data_quality_agent acts on behalf of service_account:etl_pipeline
  * 3. Autonomous: nightly_audit has explicit grants, owner is admin_carol (for accountability only)
  */
 
@@ -19,6 +19,29 @@ export const userDelegatedAgentTuples = [
   { user: 'user:scheduling_agent', relation: 'agent',                object: 'agent_delegation:jones_to_sched' },
   { user: 'user:patient_jones',    relation: 'delegating_principal', object: 'agent_delegation:jones_to_sched' },
   { user: 'user:scheduling_agent', relation: 'is_active',           object: 'agent_delegation:jones_to_sched' },
+];
+
+// --- Service-delegated agent: data_quality_agent ---
+// service_account:etl_pipeline delegates to data_quality_agent for patient data validation.
+// The service account has treating_practitioner access on patient:jones (for ETL reads).
+export const serviceDelegatedAgentTuples = [
+  // Agent capability: data_quality_agent can read patients
+  { user: 'user:data_quality_agent', relation: 'agent', object: 'agent_capability:dq_patient_read' },
+
+  // Active delegation from service_account:etl_pipeline to data_quality_agent
+  { user: 'user:data_quality_agent',          relation: 'agent',                object: 'agent_delegation:etl_to_dq' },
+  { user: 'user:service_account_etl_pipeline', relation: 'delegating_principal', object: 'agent_delegation:etl_to_dq' },
+  { user: 'user:data_quality_agent',          relation: 'is_active',           object: 'agent_delegation:etl_to_dq' },
+];
+
+// --- Service-account resource permissions (written alongside healthcare tuples) ---
+// The service account needs explicit resource permissions — same as any other principal.
+export const serviceAccountResourceTuples = [
+  // service_account is a tenant member
+  { user: 'user:service_account_etl_pipeline', relation: 'member', object: 'tenant:acme_health' },
+
+  // service_account has treating_practitioner access to patient:jones (for ETL processing)
+  { user: 'user:service_account_etl_pipeline', relation: 'treating_practitioner', object: 'patient:jones' },
 ];
 
 // --- Autonomous agent: nightly_audit ---
@@ -62,6 +85,8 @@ export const confusedDeputyTuples = [
 export function getAllAgentTuples() {
   return [
     ...userDelegatedAgentTuples,
+    ...serviceDelegatedAgentTuples,
+    ...serviceAccountResourceTuples,
     ...autonomousAgentTuples,
     ...ceilingTestTuples,
     ...confusedDeputyTuples,

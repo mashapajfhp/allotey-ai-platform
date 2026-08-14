@@ -1,9 +1,25 @@
 # Spike 004: OpenFGA Authorization — Delegation, ScopeContext, and Three Agent Modes
 
-> STATUS: PASS
+> STATUS: PASS — CORE AUTHORIZATION SEMANTICS
 > Last updated: 2026-08-14
 > Prototype: `spikes/prototypes/004-openfga-authorization/`
 > References: `architecture/authorization-architecture.md`, `architecture/identity-federation-architecture.md`, `architecture/platform-api-architecture.md`, `architecture/platform-tenancy-model.md`
+>
+> **Remaining validation:**
+> - Full ScopeContext ancestry (Platform → Product → Environment → Organization → Tenant → Workspace → Resource)
+> - Contextual tuples for session/time scoping
+> - Multi-agent delegation chains (agent → agent → agent)
+> - Production datastore consistency and HA behavior
+> - Performance at scale
+
+## Dependency Versions
+
+| Component | Version | Image Digest | Test Date |
+|---|---|---|---|
+| OpenFGA | v1.9.5 | `openfga/openfga@sha256:ce3d4cbcde988a7a8251ad42831d0c5d2949a11060285ff7414317ae96aff131` | 2026-08-14 |
+| OpenFGA SDK | @openfga/sdk ^0.7.0 | npm | 2026-08-14 |
+| Node.js | v22.x (node:test runner) | local | 2026-08-14 |
+| Datastore | In-memory (single node) | — | 2026-08-14 |
 
 ## Question
 
@@ -27,6 +43,7 @@ This was deliberate: spike 008's architecture board review found that its adapte
 | Performance benchmarking | Deferred | Correctness first; perf is a separate concern |
 | Contextual tuples for time/session scoping | Deferred | Adds complexity; stored tuples sufficient to prove patterns |
 | Multi-agent chains (agent→agent→agent) | Not tested | Not core for initial validation |
+| Service-delegated inferred only | Explicitly tested | Architecture board required real tests, not structural analogy |
 
 ## Prototype Plan
 
@@ -53,7 +70,7 @@ The model uses **deny-by-default** — no entity type has `member from tenant` o
 
 | Type | Relations | Purpose |
 |---|---|---|
-| `user` | — | Identity anchor |
+| `user` | — | Identity anchor (represents both human users and service accounts) |
 | `tenant` | `member`, `admin` | Tenant membership (grants no resource access) |
 | `clinic` | `admin`, `receptionist`, `practitioner`, `nurse`, `billing_specialist`, `referral_coordinator` | Staff assignments; `can_read` and `can_manage` computed |
 | `patient` | `self_access`, `treating_practitioner`, `clinic`, `admin` | `can_read` unions self + treating + receptionist-from-clinic + coordinator-from-clinic + nurse-from-clinic + admin |
@@ -69,11 +86,11 @@ The model uses **deny-by-default** — no entity type has `member from tenant` o
 
 ### Test Scenarios
 
-All 13 scenarios from the original spec were covered, except multi-agent chains (scenario 8) and the two contextual tuple scenarios (9, part of 10). Service-delegated mode (scenario 2) is structurally identical to user-delegated, confirmed by the 3-layer check implementation working the same way.
+All 13 scenarios from the original spec were covered, except multi-agent chains (scenario 8) and the two contextual tuple scenarios (9, part of 10). Service-delegated mode (scenario 2) was explicitly tested with dedicated tests — not inferred by structural analogy.
 
 ## Results
 
-**87 tests across 10 test suites, 0 failures.** All tests ran against a real OpenFGA instance (Docker, `openfga/openfga:latest`, in-memory datastore).
+**95 tests across 11 test suites, 0 failures.** All tests ran against a real OpenFGA instance (Docker, `openfga/openfga:v1.9.5`, in-memory datastore, single node).
 
 ### Test Suite Summary
 
@@ -89,17 +106,18 @@ All 13 scenarios from the original spec were covered, except multi-agent chains 
 | `08-confused-deputy` | 4 | Tenant B agent cannot access Tenant A resources, layer-by-layer verification showing layer 1 catches the mismatch |
 | `09-delegation-ceiling` | 5 | Agent with delete capability DENIED when principal lacks delete, agent with write capability DENIED for clinical update, ceiling allows when principal has access |
 | `10-revocation` | 6 | Delete treating tuple → immediate DENY, restore → immediate ALLOW, remove receptionist from clinic → DENY, deactivate delegation → DENY, remove admin → DENY |
+| `11-agent-service-delegated` | 8 | Service account delegates to agent → ALLOW, service account lacks perm → DENY, cross-tenant via service account → DENY, delegation ceiling for service account, revocation of service account permission, revocation of delegation, independent 3-layer verification |
 
 ### Scenario-by-Scenario Results
 
 | # | Original Scenario | Result | Test File |
 |---|---|---|---|
 | 1 | User-delegated — every governance layer independently permits | PASS | `04-agent-user-delegated` |
-| 2 | Service-delegated — same governance model | PASS (structural) | Same 3-layer check works for any principal type |
+| 2 | Service-delegated — same governance model | PASS (explicitly tested) | `11-agent-service-delegated` |
 | 3 | Autonomous — explicitly configured, not inherited | PASS | `05-agent-autonomous` |
 | 4 | Autonomous accountability — owner recorded but perms don't apply | PASS | `05-agent-autonomous` (tests 3-4) |
 | 5 | Layered governance — user has perm but agent scope doesn't | PASS | `04-agent-user-delegated` (test 4) |
-| 6 | Revocation — immediate access loss | PASS | `10-revocation` |
+| 6 | Revocation — immediate access loss (single-node in-memory caveat) | PASS | `10-revocation`, `11-agent-service-delegated` (tests 6-7) |
 | 7 | Escalation prevention — agent exceeds principal | PASS | `09-delegation-ceiling` |
 | 8 | Multi-agent chain | NOT TESTED | Deferred |
 | 9 | Server-side scope resolution | PARTIAL | Tenant isolation proves it; full ancestry chain deferred |
@@ -112,7 +130,7 @@ All 13 scenarios from the original spec were covered, except multi-agent chains 
 
 ### Observed
 
-None. All 87 checks produced the expected result. One model validation error was caught during development: a self-referencing `computedUserset` on the clinic `admin` relation, fixed by making it a direct `this` relation.
+None. All 95 checks produced the expected result. One model validation error was caught during development: a self-referencing `computedUserset` on the clinic `admin` relation, fixed by making it a direct `this` relation.
 
 ### Assessed but Not Triggered
 
@@ -120,7 +138,7 @@ None. All 87 checks produced the expected result. One model validation error was
 |---|---|
 | Contextual tuple latency | Not tested — deferred to performance spike |
 | Delegation chain depth | Not tested — multi-agent chains deferred |
-| Eventual consistency revocation window | **Not observed** — all revocation tests showed immediate DENY after tuple deletion |
+| Eventual consistency revocation window | Not observed in single-node in-memory config — production consistency with persistent datastore, replicas, and caches remains unvalidated (see Security Findings §5) |
 | Model complexity debugging | 12 type definitions remained understandable; model JSON is 350 lines |
 | Transitive delegation escalation | Not tested — only single-hop delegation validated |
 | Contextual tuple lifetime leaks | Not applicable — prototype uses stored tuples only |
@@ -131,11 +149,13 @@ None. All 87 checks produced the expected result. One model validation error was
 
 2. **Store isolation** — Each test suite creates its own store with its own model and tuples. No cross-test contamination. This maps well to test isolation in CI.
 
-3. **Tuple write batching** — The SDK accepts up to 100 tuples per write call. The prototype writes ~80 tuples per store setup, fitting in a single batch.
+3. **Tuple write batching** — The SDK accepts up to 100 tuples per write call. The prototype writes ~90 tuples per store setup, fitting in a single batch.
 
 4. **Model versioning** — Each `writeAuthorizationModel` call returns a `modelId`. The SDK automatically uses the latest model for checks. Model changes are append-only (new version, old tuples still valid).
 
 5. **Port binding** — Default port 8080 commonly conflicts with other services. The prototype maps to 18080. Production deployments should plan for this.
+
+6. **Version pinning** — The prototype pins `openfga/openfga:v1.9.5` rather than `:latest`. All architecture spikes must record component version, image digest, and test date for reproducibility.
 
 ## Security Findings
 
@@ -147,28 +167,41 @@ None. All 87 checks produced the expected result. One model validation error was
 
 4. **Autonomous agent isolation is complete** — The owner relationship exists only for accountability. No OpenFGA relation path connects the owner's permissions to the agent's access decisions. The agent must have its own explicit grants.
 
-5. **Revocation is immediate** — No eventual consistency window was observed. Deleting a tuple and immediately checking produces DENY. This applies to treating relationships, clinic assignments, delegation activation, and admin assignments.
+5. **Revocation is immediately reflected in single-node in-memory configuration** — Deleting a tuple and immediately checking produces DENY. This applies to treating relationships, clinic assignments, delegation activation, admin assignments, and service-account delegations. **However, this has only been validated against `OPENFGA_DATASTORE_ENGINE=memory` on a single node.** Production behavior with a persistent datastore (PostgreSQL/MySQL), multiple OpenFGA instances, caches, replicas, and network latency may exhibit a brief consistency window. Production consistency behavior remains to be validated.
 
 6. **Cross-tenant isolation is absolute** — Tenant B admin cannot access any Tenant A resource type. The isolation is structural (no relationship path exists), not policy-based.
+
+7. **Service-delegated mode is explicitly validated** — The 3-layer governance model works identically for service account principals: delegation, ceiling, cross-tenant denial, and revocation all produce correct results. This is now tested, not inferred.
 
 ## Performance Findings
 
 Performance benchmarking was explicitly out of scope for this spike (correctness first). Anecdotal observations from the test run:
 
-- **87 checks completed in ~378ms total** (including store creation, model writes, and tuple writes for 10 stores)
+- **95 checks completed in ~449ms total** (including store creation, model writes, and tuple writes for 11 stores)
 - Individual Check calls averaged 3-7ms against the in-memory datastore
 - `tupleToUserset` resolution (e.g., receptionist-from-clinic) did not show measurably higher latency than direct relation checks
 - The 3-layer agent delegation check (3 sequential Check calls) completed in 5-18ms total
 
-These numbers are not benchmarks. A dedicated performance spike should test sustained load, large tuple sets, and concurrent access.
+These numbers are not benchmarks. A dedicated performance spike should test sustained load, large tuple sets, persistent datastores, and concurrent access.
 
 ## Conclusion
 
-**The hypothesis survives.** OpenFGA can correctly model deny-by-default healthcare authorization, the three agent execution modes, workspace-level authorization, and cross-tenant isolation using stored relationships. All 13 planned scenarios either pass or are structurally covered, except multi-agent chains (deferred).
+**The core authorization semantics hypothesis survives.** OpenFGA can correctly model deny-by-default healthcare authorization, all three agent execution modes (user-delegated, service-delegated, autonomous), workspace-level authorization, and cross-tenant isolation using stored relationships.
 
-The 3-layer agent delegation pattern (principal permission → agent capability → active delegation) works as designed. Each layer is independently evaluated via a separate Check call. This is the application-level enforcement of "every applicable governance layer independently permits."
+All 13 planned scenarios either pass or are explicitly noted as deferred (multi-agent chains, full ScopeContext ancestry). Service-delegated mode is now explicitly tested with 8 dedicated tests covering delegation, ceiling, cross-tenant denial, and revocation.
+
+The 3-layer agent delegation pattern (principal permission → agent capability → active delegation) works as designed for both human user and service account principals. Each layer is independently evaluated via a separate Check call. This is the application-level enforcement of "every applicable governance layer independently permits."
 
 The key output of this spike is not just test results but the **correct authorization model shape** — the 12 type definitions in `models/healthcare-authorization.json` serve as the reference for fixing spike 008's adapter. The adapter must generate models that look like this, not the `viewer: [user, agent] or member from tenant` pattern it currently produces.
+
+### What This Spike Does NOT Prove
+
+- That OpenFGA is the final authorization engine selection (other candidates like SpiceDB could also pass these tests)
+- That the full ScopeContext hierarchy (Platform → Product → Environment → Organization → Tenant → Workspace → Resource) works in OpenFGA
+- That revocation is immediate under production conditions (persistent datastore, HA, caches)
+- That performance is acceptable at scale
+- That multi-agent delegation chains are safe from escalation
+- That the spike 008 compiler can generate this correct model shape (that is the next validation milestone)
 
 ## Recommendation
 
@@ -179,36 +212,71 @@ The key output of this spike is not just test results but the **correct authoriz
    - Omit `member from tenant` from all entity type relations
    - Generate agent delegation types (`agent_capability`, `agent_delegation`, `agent_grant`)
 
-2. **Implement 3-layer delegation check in the authorization service** — This is application-level logic, not model-level. The service makes 3 sequential Check calls and requires all to pass.
+2. **Highest priority: compiler-generated model must pass this same test suite** — The spike 004 test suite is the behavioral contract. When the spike 008 adapter is fixed, the compiler-generated OpenFGA model must pass the same 95 allow/deny checks. Do not write a separate test suite for generated output; reuse this one. This proves the step from "OpenFGA can express the rules" to "our compiler can faithfully translate vendor-neutral authorization definitions into executable OpenFGA semantics."
 
-3. **Defer performance spike** — Correctness is proven. A follow-up spike should test sustained load, large tuple sets (100K+), and contextual tuple overhead.
+3. **Implement 3-layer delegation check in the authorization service** — This is application-level logic, not model-level. The service makes 3 sequential Check calls and requires all to pass.
 
-4. **Defer contextual tuples** — Stored tuples are sufficient for all validated patterns. Contextual tuples add complexity for session/time scoping but are not required for the core authorization model.
+4. **Validate full ScopeContext ancestry** — Either extend spike 004 or create a dedicated test for the full path: Platform → Product → Environment → Organization → Tenant → Workspace → Resource. Include malicious mismatches (Product Admin A → Product B environment → DENY).
 
-5. **Defer multi-agent chains** — Single-hop delegation is validated. Agent-to-agent delegation (User → Agent A → Agent B) should be tested in a follow-up if the architecture requires it.
+5. **Defer performance spike** — Correctness is proven. A follow-up spike should test sustained load, large tuple sets (100K+), persistent datastores, and contextual tuple overhead.
+
+6. **Defer contextual tuples** — Stored tuples are sufficient for all validated patterns. Contextual tuples add complexity for session/time scoping but are not required for the core authorization model.
+
+7. **Defer multi-agent chains** — Single-hop delegation is validated. Agent-to-agent delegation (User → Agent A → Agent B) should be tested in a follow-up if the architecture requires it.
+
+## Compilation Conformance Suite
+
+This spike introduces a methodology that should become a first-class platform concept.
+
+The spike 004 test suite is a **behavioral contract** — it defines expected allow/deny outcomes independent of the authorization engine. Any implementation that passes these checks correctly models the healthcare authorization semantics.
+
+This pattern should apply to every IR adapter:
+
+| IR | Behavioral Contract | Target Runtime |
+|---|---|---|
+| **Authorization IR** | Allow/deny check suite (this spike) | OpenFGA (validated), SpiceDB (future), any ReBAC engine |
+| **Ontology IR** | Schema + RLS behavioral tests | PostgreSQL (spike 001), any RDBMS |
+| **Semantic IR** | Known metric queries → expected numbers | Cube, any semantic layer |
+| **Workflow IR** | Execute workflow → expected transitions/retries/approvals | Temporal, any workflow engine |
+| **Agent Capability IR** | Capability/tool restrictions → expected behavior | Agno/LangGraph, any agent framework |
+
+If every adapter for a given IR must pass the same behavioral contract, then the platform achieves **testably portable** vendor neutrality. Replacing OpenFGA with SpiceDB becomes a matter of passing the same conformance suite, not rewriting tests.
+
+This is a direct validation mechanism for the Intelligence-as-Code architecture thesis.
 
 ## Confidence Level
 
-**HIGH** — 87/87 functional correctness tests pass against a real OpenFGA instance. The deny-by-default model produces correct allow/deny for all healthcare entity types, agent delegation modes, workspace authorization, and tenant isolation. Revocation is immediate with no observed consistency window.
+**HIGH for core authorization semantics** — 95/95 functional correctness tests pass against a real OpenFGA instance. The deny-by-default model produces correct allow/deny for all healthcare entity types, all three agent delegation modes, workspace authorization, and tenant isolation.
 
-Confidence is lower for:
-- Performance at scale (not tested)
-- Multi-agent delegation chains (not tested)
-- Contextual tuple behavior (not tested)
-- Model complexity beyond 12 types (not tested)
+**Confidence is lower for:**
+
+| Area | Confidence | Reason |
+|---|---|---|
+| Core relationship authorization patterns | HIGH | 95 tests, 7 entity types, deny-by-default |
+| User-delegated agent governance | HIGH | 5 tests, 3-layer check, ceiling, revocation |
+| Service-delegated agent governance | HIGH | 8 dedicated tests, not inferred |
+| Autonomous agent isolation | HIGH | 5 tests, owner perms not inherited |
+| Tenant isolation | HIGH | 10 tests, all entity types, admin included |
+| Workspace authorization | HIGH | 8 tests, cross-workspace denied |
+| Revocation immediacy | MEDIUM | Observed in single-node in-memory only |
+| Full ScopeContext hierarchy | LOW | Only tenant/workspace tested, not full ancestry |
+| Performance at scale | UNTESTED | Deferred |
+| Multi-agent delegation chains | UNTESTED | Deferred |
+| Contextual tuple behavior | UNTESTED | Deferred |
+| Compiler generating correct model | UNTESTED | Highest priority next step |
 
 ## Prototype Artifacts
 
 ```
 spikes/prototypes/004-openfga-authorization/
   package.json                              # @openfga/sdk ^0.7.0, node:test
-  docker-compose.yml                        # OpenFGA in-memory on port 18080
+  docker-compose.yml                        # OpenFGA v1.9.5, in-memory, port 18080
   models/
     healthcare-authorization.json           # 12 type definitions, deny-by-default
   src/
     openfga-client.js                       # SDK wrapper: createStore, writeModel, writeTuples, check, checkAgentDelegation
     healthcare-tuples.js                    # 7 tuple categories, 2 tenants, 2 clinics, ~80 tuples
-    agent-tuples.js                         # 4 agent scenarios: user-delegated, autonomous, ceiling, confused-deputy
+    agent-tuples.js                         # 5 agent scenarios: user-delegated, service-delegated, autonomous, ceiling, confused-deputy
   test/
     setup.js                                # Store creation helper
     01-deny-by-default.test.js              # 8 tests
@@ -221,6 +289,7 @@ spikes/prototypes/004-openfga-authorization/
     08-confused-deputy.test.js              # 4 tests
     09-delegation-ceiling.test.js           # 5 tests
     10-revocation.test.js                   # 6 tests
+    11-agent-service-delegated.test.js      # 8 tests
 ```
 
 ### Running the Prototype
@@ -228,12 +297,12 @@ spikes/prototypes/004-openfga-authorization/
 ```bash
 cd spikes/prototypes/004-openfga-authorization
 
-# Start OpenFGA
+# Start OpenFGA (pinned v1.9.5)
 docker compose up -d
 curl -sf http://localhost:18080/healthz  # {"status":"SERVING"}
 
 # Run tests
-npm test  # 87 passing, 0 failing
+npm test  # 95 passing, 0 failing
 
 # Tear down
 docker compose down

@@ -1,6 +1,6 @@
 services:
   openfga:
-    image: openfga/openfga:latest
+    image: openfga/openfga:v1.9.5  # pinned — do not use :latest for reproducibility
     container_name: openfga-spike-004
     command: run
     environment:
